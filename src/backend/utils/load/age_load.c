@@ -117,7 +117,11 @@ static char *build_safe_filename(char *name)
 
     snprintf(path, sizeof(path), "%s%s", AGE_BASE_CSV_DIRECTORY, name);
 
+#ifdef _WIN32
+    resolved = _fullpath(NULL, path, MAXPGPATH);
+#else
     resolved = realpath(path, NULL);
+#endif
 
     if (resolved == NULL)
     {

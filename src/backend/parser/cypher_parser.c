@@ -35,7 +35,7 @@ int cypher_yylex(YYSTYPE *lvalp, YYLTYPE *llocp, ag_scanner_t scanner)
         0,
         INTEGER,
         DECIMAL,
-        STRING,
+        CYTOK_STRING,
         IDENTIFIER,
         PARAMETER,
         NOT_EQ,
@@ -44,7 +44,7 @@ int cypher_yylex(YYSTYPE *lvalp, YYLTYPE *llocp, ag_scanner_t scanner)
         DOT_DOT,
         TYPECAST,
         PLUS_EQ,
-        CHAR,
+        CYTOK_CHAR,
         BQIDENT,
         OP
     };

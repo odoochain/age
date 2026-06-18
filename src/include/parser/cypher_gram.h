@@ -62,6 +62,15 @@ typedef struct cypher_yy_extra
  * cypher_yy_extra must be defined before this because it is another parameter
  * of cypher_yyparse().
  */
+#ifdef _WIN32
+#undef IN
+#undef OUT
+#undef DELETE
+#undef VOID
+#undef OPTIONAL
+#undef near
+#undef far
+#endif
 #include "parser/cypher_gram_def.h"
 
 /* cypher_parser.c */

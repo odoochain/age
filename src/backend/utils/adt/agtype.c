@@ -10299,8 +10299,17 @@ Datum age_timestamp(PG_FUNCTION_ARGS)
     long ms = 0;
 
     /* get the system time and convert it to milliseconds */
+#ifdef _WIN32
+    {
+        FILETIME ft;
+        GetSystemTimeAsFileTime(&ft);
+        uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+        ms = (long)((t - 116444736000000000ULL) / 10000);
+    }
+#else
     clock_gettime(CLOCK_REALTIME, &ts);
     ms += (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
+#endif
 
     /* build the result */
     agtv_result.type = AGTV_INTEGER;

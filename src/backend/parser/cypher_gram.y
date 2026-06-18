@@ -67,13 +67,13 @@
 }
 
 %token <integer> INTEGER
-%token <string> DECIMAL STRING
+%token <string> DECIMAL CYTOK_STRING
 
 %token <string> IDENTIFIER
 %token <string> PARAMETER
 %token <string> BQIDENT
 %token <string> OP
-%token <character> CHAR
+%token <character> CYTOK_CHAR
 
 /* operators that have more than 1 character */
 %token NOT_EQ LT_EQ GT_EQ DOT_DOT TYPECAST PLUS_EQ
@@ -1968,7 +1968,7 @@ expr_literal:
         {
             $$ = make_float_const($1, @1);
         }
-    | STRING
+    | CYTOK_STRING
         {
             $$ = make_string_const($1, @1);
         }
@@ -2889,7 +2889,7 @@ static char *create_unique_name(char *prefix_name)
 {
     char *name = NULL;
     char *prefix = NULL;
-    uint nlen = 0;
+    unsigned int nlen = 0;
     unsigned long unique_number = 0;
 
     /* get a unique number */
