@@ -1,0 +1,2 @@
+@echo off
+"C:\Program Files\Git\bin\bash.exe" -c "export PATH=/usr/bin:$PATH && cd D:/odoochain/odoo19/age-source && sed -i 's|#include \"parser/cypher_gram_def.h\"|#ifdef _WIN32\n#undef IN\n#undef OUT\n#undef DELETE\n#undef VOID\n#undef OPTIONAL\n#undef near\n#undef far\n#endif\n#include \"parser/cypher_gram_def.h\"|' src/include/parser/cypher_gram.h && grep -n 'undef\|cypher_gram_def' src/include/parser/cypher_gram.h"
