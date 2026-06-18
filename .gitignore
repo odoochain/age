@@ -1,6 +1,10 @@
 *.o
+*.obj
 *.so
+*.dll
+*.a
 build.sh
+build.bat
 .idea
 .deps
 .DS_Store
@@ -13,5 +17,7 @@ __pycache__
 **/__pycache__
 **/.venv
 **/apache_age_python.egg-info
+.env
+.env.local
 
 drivers/python/build
