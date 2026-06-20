@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 echo === Step 1: Drop and recreate baraka with UTF-8 ===
 "C:\Users\mirroam\scoop\apps\msys2\current\usr\bin\bash.exe" -c "export PATH=/mingw64/bin:/usr/bin:$PATH && psql -p 5433 -d postgres -c 'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '\''baraka'\'' AND pid <> pg_backend_pid();' 2>&1 && psql -p 5433 -d postgres -c 'DROP DATABASE baraka;' 2>&1 && psql -p 5433 -d postgres -c 'CREATE DATABASE baraka OWNER odoo ENCODING '\''UTF8'\'' LC_COLLATE '\''C'\'' LC_CTYPE '\''C'\'' TEMPLATE template0;' 2>&1 && echo Database recreated OK"
 echo.

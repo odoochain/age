@@ -20,12 +20,16 @@ def rows_from_psql(sql):
     return [line.strip() for line in raw.split('\n') if line.strip()]
 
 def esc(s):
-    return str(s).replace("'", "\\'")
+    s = str(s)
+    s = s.replace('\\', '\\\\')
+    s = s.replace("'", "\\'")
+    return s
 
-def build_sql(graph, lines):
+def build_sql(graph, lines, include_header=True):
     """生成 SQL 文件并执行"""
     with tempfile.NamedTemporaryFile(mode='w', suffix='.sql', delete=False, encoding='utf-8') as f:
-        f.write("LOAD 'age';\nSET search_path = ag_catalog, \"$user\", public;\n")
+        if include_header:
+            f.write("LOAD 'age';\nSET search_path = ag_catalog, \"$user\", public;\n")
         for line in lines:
             f.write(line + "\n")
         sql_path = f.name
@@ -42,7 +46,7 @@ def main():
     rels = []
     
     # 清理
-    nodes.append("SELECT * FROM cypher('{G}', $$ MATCH (n) DETACH DELETE n $$) AS (r agtype);".replace('{G}', G))
+    nodes.append(f"SELECT * FROM cypher('{G}', $$ MATCH (n) DETACH DELETE n $$) AS (r agtype);")
     
     # 客户
     print("Client nodes...")
@@ -128,12 +132,10 @@ def main():
     # 验证
     print("\n=== Verification ===")
     lines = [
-        "LOAD 'age';",
-        "SET search_path = ag_catalog, \"$user\", public;",
         f"SELECT * FROM cypher('{G}', $$ MATCH (n) RETURN labels(n)[0] AS label, count(*) AS cnt ORDER BY cnt DESC $$) AS (label agtype, cnt agtype);",
         f"SELECT * FROM cypher('{G}', $$ MATCH ()-[r]->() RETURN type(r) AS rel, count(*) AS cnt ORDER BY cnt DESC $$) AS (rel agtype, cnt agtype);",
     ]
-    build_sql(G, lines)
+    build_sql(G, lines, include_header=True)
 
 if __name__ == '__main__':
     main()
