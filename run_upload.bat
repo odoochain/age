@@ -1,2 +1,2 @@
 @echo off
-"C:\Program Files\Git\bin\bash.exe" D:\odoochain\odoo19\age-source\ima_upload.sh
+"C:\Program Files\Git\bin\bash.exe" D:\dev\lawgraph\age-source\ima_upload.sh

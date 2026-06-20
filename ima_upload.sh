@@ -6,7 +6,7 @@ API_KEY=$(cat ~/.config/ima/api_key)
 OPTS="{\"clientId\":\"$CLIENT_ID\",\"apiKey\":\"$API_KEY\"}"
 
 KB_ID="${KB_ID:?Set KB_ID environment variable}"
-FILE_PATH="D:/odoochain/odoo19/age-source/BUILD_WINDOWS.md"
+FILE_PATH="D:/dev/lawgraph/age-source/BUILD_WINDOWS.md"
 
 echo "=== Step 1: Preflight check ==="
 PREFLIGHT=$(node knowledge-base/scripts/preflight-check.cjs --file "$FILE_PATH" 2>&1)

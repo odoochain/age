@@ -1,5 +1,5 @@
 #!/bin/bash
-cd D:/odoochain/odoo19/age-source
+cd D:/dev/lawgraph/age-source
 
 # Fix 1: Rename conflicting tokens
 sed -i 's/%token <string> DECIMAL STRING/%token <string> DECIMAL CYTOK_STRING/' src/backend/parser/cypher_gram.y

@@ -165,7 +165,7 @@ type C:\Users\%USERNAME%\scoop\apps\msys2\current\tmp\age_exit.txt
 ### 5.2 执行编译
 
 ```powershell
-cd D:\odoochain\odoo19\age-source
+cd D:\dev\lawgraph\age-source
 .\build_mingw.bat
 ```
 

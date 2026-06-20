@@ -1,6 +1,6 @@
 #!/bin/bash
 export PATH=/mingw64/bin:/usr/bin:$PATH
-cd D:/odoochain/odoo19/age-source
+cd D:/dev/lawgraph/age-source
 
 exec > /tmp/age_build3.log 2>&1
 

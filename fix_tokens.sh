@@ -1,6 +1,6 @@
 #!/bin/bash
 export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH
-cd D:/odoochain/odoo19/age-source
+cd D:/dev/lawgraph/age-source
 
 # Fix 1: Rename STRING, CHAR tokens in grammar (conflict with Windows typedefs)
 sed -i 's/%token <string> DECIMAL STRING/%token <string> DECIMAL CYTOK_STRING/' src/backend/parser/cypher_gram.y

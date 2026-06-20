@@ -5,7 +5,7 @@ CLIENT_ID=$(cat ~/.config/ima/client_id)
 API_KEY=$(cat ~/.config/ima/api_key)
 OPTS="{\"clientId\":\"$CLIENT_ID\",\"apiKey\":\"$API_KEY\"}"
 
-FILE_PATH="${FILE_PATH:-D:/odoochain/odoo19/age-source/BUILD_WINDOWS.md}"
+FILE_PATH="${FILE_PATH:-D:/dev/lawgraph/age-source/BUILD_WINDOWS.md}"
 KB_IDS=("${KB_IDS[@]:-}")  # Set via env: export KB_IDS=("id1" "id2")
 KB_NAMES=("${KB_NAMES[@]:-}")  # Set via env: export KB_NAMES=("name1" "name2")
 
