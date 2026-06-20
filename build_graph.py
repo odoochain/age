@@ -88,12 +88,13 @@ def main():
             nodes.append(f"SELECT * FROM cypher('{G}', $$ CREATE (t:Tag {{odoo_id: {parts[0]}, name: '{esc(parts[1])}'}}) $$) AS (r agtype);")
             print(f"  Tag: {parts[1]}")
     
-    # 消息
+    # 消息节点 (所有消息，包括无 subject 的)
     print("Message nodes...")
-    for line in rows_from_psql("SELECT id, subject FROM mail_message WHERE subject IS NOT NULL"):
+    for line in rows_from_psql("SELECT id, COALESCE(subject, '(no subject)') FROM mail_message"):
         parts = line.split('|')
         if len(parts) >= 2:
             nodes.append(f"SELECT * FROM cypher('{G}', $$ CREATE (m:Message {{odoo_id: {parts[0]}, subject: '{esc(parts[1])}'}}) $$) AS (r agtype);")
+    print(f"  {len(nodes)} message nodes")
     
     # 关系: 文档-文件夹
     print("Doc-Folder relations...")
@@ -104,6 +105,16 @@ def main():
             rels.append(f"SELECT * FROM cypher('{G}', $$ MATCH (d:Document {{odoo_id: {parts[0]}}}), (f:Folder {{odoo_id: {parts[1]}}}) CREATE (d)-[:IN_FOLDER]->(f) $$) AS (r agtype);")
             cnt += 1
     print(f"  {cnt} IN_FOLDER edges")
+    
+    # 关系: 文件夹层级 (Folder PARENT_OF Folder)
+    print("Folder-Folder hierarchy...")
+    cnt = 0
+    for line in rows_from_psql("SELECT id, folder_id FROM documents_document WHERE type = 'folder' AND folder_id IS NOT NULL"):
+        parts = line.split('|')
+        if len(parts) >= 2:
+            rels.append(f"SELECT * FROM cypher('{G}', $$ MATCH (child:Folder {{odoo_id: {parts[0]}}}), (parent:Folder {{odoo_id: {parts[1]}}}) CREATE (parent)-[:PARENT_OF]->(child) $$) AS (r agtype);")
+            cnt += 1
+    print(f"  {cnt} PARENT_OF edges")
     
     # 关系: 文档-标签
     print("Doc-Tag relations...")
@@ -118,12 +129,36 @@ def main():
     # 关系: 消息-发送者
     print("Msg-Sender relations...")
     cnt = 0
-    for line in rows_from_psql("SELECT id, author_id FROM mail_message WHERE author_id IS NOT NULL AND subject IS NOT NULL"):
+    for line in rows_from_psql("SELECT id, author_id FROM mail_message WHERE author_id IS NOT NULL"):
         parts = line.split('|')
         if len(parts) >= 2:
             rels.append(f"SELECT * FROM cypher('{G}', $$ MATCH (m:Message {{odoo_id: {parts[0]}}}), (p:Person {{odoo_id: {parts[1]}}}) CREATE (m)-[:SENT_BY]->(p) $$) AS (r agtype);")
             cnt += 1
     print(f"  {cnt} SENT_BY edges")
+    
+    # 关系: 消息-文档/文件夹 (model = 'documents.document')
+    print("Msg-Document/Folder relations...")
+    cnt = 0
+    for line in rows_from_psql("SELECT id, res_id FROM mail_message WHERE model = 'documents.document' AND res_id IS NOT NULL"):
+        parts = line.split('|')
+        if len(parts) >= 2:
+            rid = parts[1]
+            # 文件夹节点用 ABOUT 关联
+            rels.append(f"SELECT * FROM cypher('{G}', $$ MATCH (m:Message {{odoo_id: {parts[0]}}}), (f:Folder {{odoo_id: {rid}}}) CREATE (m)-[:ABOUT]->(f) $$) AS (r agtype);")
+            # 文档节点用 ABOUT 关联
+            rels.append(f"SELECT * FROM cypher('{G}', $$ MATCH (m:Message {{odoo_id: {parts[0]}}}), (d:Document {{odoo_id: {rid}}}) CREATE (m)-[:ABOUT]->(d) $$) AS (r agtype);")
+            cnt += 1
+    print(f"  {cnt} ABOUT(doc/folder) edges")
+    
+    # 关系: 消息-合作伙伴 (model = 'res.partner')
+    print("Msg-Partner relations...")
+    cnt = 0
+    for line in rows_from_psql("SELECT id, res_id FROM mail_message WHERE model = 'res.partner' AND res_id IS NOT NULL"):
+        parts = line.split('|')
+        if len(parts) >= 2:
+            rels.append(f"SELECT * FROM cypher('{G}', $$ MATCH (m:Message {{odoo_id: {parts[0]}}}), (p:Person {{odoo_id: {parts[1]}}}) CREATE (m)-[:ABOUT]->(p) $$) AS (r agtype);")
+            cnt += 1
+    print(f"  {cnt} ABOUT(partner) edges")
     
     # 执行
     print(f"\nExecuting {len(nodes)} nodes + {len(rels)} relations...")
