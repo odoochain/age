@@ -1,0 +1,2 @@
+@echo off
+"C:\Users\mirroam\scoop\apps\msys2\current\usr\bin\bash.exe" -c "export PATH=/mingw64/bin:/usr/bin:$PATH && echo '=== age_test ===' && psql -p 5433 -d age_test -c \"SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') ORDER BY schemaname, tablename;\" 2>&1 && echo '' && echo '=== postgres ===' && psql -p 5433 -d postgres -c \"SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') ORDER BY schemaname, tablename;\" 2>&1"

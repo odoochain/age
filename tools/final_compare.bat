@@ -1,0 +1,8 @@
+@echo off
+echo === Final comparison: 5432 vs 5433 ===
+echo.
+echo --- Port 5432 (source) ---
+"C:\Users\mirroam\scoop\apps\postgresql\current\bin\psql.exe" -p 5432 -h localhost -U odoo -d baraka -c "SELECT 'tables' AS metric, count(*) AS val FROM pg_tables WHERE schemaname='public' UNION ALL SELECT 'res_partner', count(*) FROM res_partner UNION ALL SELECT 'mail_message', count(*) FROM mail_message UNION ALL SELECT 'ir_model_data', count(*) FROM ir_model_data UNION ALL SELECT 'ir_attachment', count(*) FROM ir_attachment UNION ALL SELECT 'res_users', count(*) FROM res_users UNION ALL SELECT 'account_move', count(*) FROM account_move UNION ALL SELECT 'account_move_line', count(*) FROM account_move_line UNION ALL SELECT 'product_template', count(*) FROM product_template UNION ALL SELECT 'product_product', count(*) FROM product_product ORDER BY 1;" 2>&1
+echo.
+echo --- Port 5433 (target) ---
+"C:\Users\mirroam\scoop\apps\msys2\current\usr\bin\bash.exe" -c "export PATH=/mingw64/bin:/usr/bin:$PATH && psql -p 5433 -d baraka -c \"SELECT 'tables' AS metric, count(*) AS val FROM pg_tables WHERE schemaname='public' UNION ALL SELECT 'res_partner', count(*) FROM res_partner UNION ALL SELECT 'mail_message', count(*) FROM mail_message UNION ALL SELECT 'ir_model_data', count(*) FROM ir_model_data UNION ALL SELECT 'ir_attachment', count(*) FROM ir_attachment UNION ALL SELECT 'res_users', count(*) FROM res_users UNION ALL SELECT 'account_move', count(*) FROM account_move UNION ALL SELECT 'account_move_line', count(*) FROM account_move_line UNION ALL SELECT 'product_template', count(*) FROM product_template UNION ALL SELECT 'product_product', count(*) FROM product_product ORDER BY 1;\" 2>&1"

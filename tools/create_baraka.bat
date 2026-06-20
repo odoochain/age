@@ -1,0 +1,2 @@
+@echo off
+"C:\Users\mirroam\scoop\apps\msys2\current\usr\bin\bash.exe" -c "export PATH=/mingw64/bin:/usr/bin:$PATH && psql -p 5433 -d postgres -c \"CREATE DATABASE baraka OWNER odoo;\" 2>&1 && psql -p 5433 -d baraka -c \"CREATE EXTENSION IF NOT EXISTS age;\" 2>&1 && psql -p 5433 -d baraka -c \"CREATE EXTENSION IF NOT EXISTS vector;\" 2>&1 && psql -p 5433 -d baraka -c \"SELECT extname, extversion FROM pg_extension WHERE extname IN ('age','vector');\" 2>&1"
