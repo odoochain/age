@@ -90,11 +90,15 @@ def main():
     
     # 消息节点 (所有消息，包括无 subject 的)
     print("Message nodes...")
-    for line in rows_from_psql("SELECT id, COALESCE(subject, '(no subject)') FROM mail_message"):
+    for line in rows_from_psql("SELECT id, COALESCE(subject, '(no subject)'), COALESCE(date::text, '') FROM mail_message"):
         parts = line.split('|')
-        if len(parts) >= 2:
-            nodes.append(f"SELECT * FROM cypher('{G}', $$ CREATE (m:Message {{odoo_id: {parts[0]}, subject: '{esc(parts[1])}'}}) $$) AS (r agtype);")
-    print(f"  {len(nodes)} message nodes")
+        if len(parts) >= 3:
+            oid, subject, msg_date = parts[0], parts[1], parts[2]
+            if msg_date:
+                nodes.append(f"SELECT * FROM cypher('{G}', $$ CREATE (m:Message {{odoo_id: {oid}, subject: '{esc(subject)}', msg_date: '{esc(msg_date)}'}}) $$) AS (r agtype);")
+            else:
+                nodes.append(f"SELECT * FROM cypher('{G}', $$ CREATE (m:Message {{odoo_id: {oid}, subject: '{esc(subject)}'}}) $$) AS (r agtype);")
+    print(f"  message nodes added")
     
     # 关系: 文档-文件夹
     print("Doc-Folder relations...")

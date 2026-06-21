@@ -82,3 +82,20 @@ BEGIN
     );
 END;
 $fn$;
+
+-- ============================================
+-- 6. 按时间段查消息
+-- 用法: SELECT * FROM legal_graph.messages_by_date_range('2026-06-01', '2026-06-30');
+-- ============================================
+CREATE OR REPLACE FUNCTION legal_graph.messages_by_date_range(p_start TEXT, p_end TEXT)
+RETURNS TABLE(message_subject text, msg_date text, sender_name text)
+LANGUAGE plpgsql
+SET search_path = ag_catalog, "$user", public AS $fn$
+BEGIN
+    LOAD 'age';
+    RETURN QUERY EXECUTE format(
+        'SELECT cy.subject::text, cy.msg_date::text, cy.sender::text FROM cypher(''legal_knowledge'', $cy$ MATCH (msg:Message)-[:SENT_BY]->(sender:Person) RETURN msg.subject, msg.msg_date, sender.name $cy$) AS cy(subject agtype, msg_date agtype, sender agtype) WHERE cy.msg_date::text >= ''%s'' AND cy.msg_date::text <= ''%s''',
+        p_start, p_end
+    );
+END;
+$fn$;
