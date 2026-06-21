@@ -1,0 +1,2743 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Baraka 数据库 ER 图</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+body { font-family: -apple-system, "Microsoft YaHei", sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; background: #f8f9fa; }
+h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+h2 { color: #007bff; margin-top: 40px; cursor: pointer; user-select: none; }
+h2:hover { text-decoration: underline; }
+h2::before { content: "▼ "; font-size: 0.8em; }
+.collapsed h2::before { content: "▶ "; }
+.mermaid { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin: 10px 0 30px; overflow-x: auto; }
+.summary { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 1.1em; }
+.section { margin-bottom: 10px; }
+.section.collapsed .mermaid-container { display: none; }
+</style>
+</head>
+<body>
+<h1>Baraka 数据库 ER 图</h1>
+<div class="summary">📊 总表数: 530 | 总外键: 1758 | 按模块分组 | 点击标题折叠/展开</div>
+<div class="section" id="sec0">
+<h2 onclick="toggle(0)">基础资源 (res_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  res_bank {
+    int id PK
+  }
+  res_city {
+    int id PK
+  }
+  res_company {
+    int id PK
+  }
+  res_company_spreadsheet_dashboard_rel {
+    int id PK
+  }
+  res_company_users_rel {
+    int id PK
+  }
+  res_config {
+    int id PK
+  }
+  res_config_settings {
+    int id PK
+  }
+  res_country {
+    int id PK
+  }
+  res_country_group {
+    int id PK
+  }
+  res_country_group_pricelist_rel {
+    int id PK
+  }
+  res_country_group_res_country_state_rel {
+    int id PK
+  }
+  res_country_res_country_group_rel {
+    int id PK
+  }
+  res_country_state {
+    int id PK
+  }
+  res_currency {
+    int id PK
+  }
+  res_currency_rate {
+    int id PK
+  }
+  res_device_log {
+    int id PK
+  }
+  res_groups {
+    int id PK
+  }
+  res_groups_implied_rel {
+    int id PK
+  }
+  res_groups_privilege {
+    int id PK
+  }
+  res_groups_report_rel {
+    int id PK
+  }
+  res_groups_spreadsheet_dashboard_rel {
+    int id PK
+  }
+  res_groups_spreadsheet_document_to_dashboard_rel {
+    int id PK
+  }
+  res_groups_users_rel {
+    int id PK
+  }
+  res_lang {
+    int id PK
+  }
+  res_lang_install_rel {
+    int id PK
+  }
+  res_partner {
+    int id PK
+  }
+  res_partner_bank {
+    int id PK
+  }
+  res_partner_category {
+    int id PK
+  }
+  res_partner_industry {
+    int id PK
+  }
+  res_partner_res_partner_category_rel {
+    int id PK
+  }
+  res_role {
+    int id PK
+  }
+  res_role_res_users_rel {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  res_users_apikeys {
+    int id PK
+  }
+  res_users_apikeys_description {
+    int id PK
+  }
+  res_users_deletion {
+    int id PK
+  }
+  res_users_identitycheck {
+    int id PK
+  }
+  res_users_log {
+    int id PK
+  }
+  res_users_settings {
+    int id PK
+  }
+  res_users_settings_embedded_action {
+    int id PK
+  }
+  res_users_settings_volumes {
+    int id PK
+  }
+  res_users_spreadsheet_dashboard_rel {
+    int id PK
+  }
+  res_users_web_tour_tour_rel {
+    int id PK
+  }
+  res_bank }o--|| res_users : "write_uid"
+  res_bank }o--|| res_bank : "intermediary_bank_id"
+  res_bank }o--|| res_country : "country"
+  res_bank }o--|| res_country_state : "state"
+  res_city }o--|| res_country_state : "state_id"
+  res_city }o--|| res_users : "create_uid"
+  res_city }o--|| res_country : "country_id"
+  res_company }o--|| res_company : "parent_id"
+  res_company }o--|| res_partner : "partner_id"
+  res_company }o--|| res_users : "signing_user"
+  res_company }o--|| res_country : "account_fiscal_country_id"
+  res_company }o--|| res_currency : "currency_id"
+  res_company_spreadsheet_dashboard_rel }o--|| res_company : "res_company_id"
+  res_company_users_rel }o--|| res_users : "user_id"
+  res_company_users_rel }o--|| res_company : "cid"
+  res_config }o--|| res_users : "write_uid"
+  res_config_settings }o--|| res_users : "write_uid"
+  res_config_settings }o--|| res_company : "company_id"
+  res_country }o--|| res_currency : "currency_id"
+  res_country }o--|| res_users : "create_uid"
+  res_country_group }o--|| res_users : "create_uid"
+  res_country_group_pricelist_rel }o--|| res_country_group : "res_country_group_id"
+  res_country_group_res_country_state_rel }o--|| res_country_state : "res_country_state_id"
+  res_country_group_res_country_state_rel }o--|| res_country_group : "res_country_group_id"
+  res_country_res_country_group_rel }o--|| res_country_group : "res_country_group_id"
+  res_country_res_country_group_rel }o--|| res_country : "res_country_id"
+  res_country_state }o--|| res_users : "create_uid"
+  res_country_state }o--|| res_country : "country_id"
+  res_currency }o--|| res_users : "write_uid"
+  res_currency_rate }o--|| res_company : "company_id"
+  res_currency_rate }o--|| res_users : "create_uid"
+  res_currency_rate }o--|| res_currency : "currency_id"
+  res_device_log }o--|| res_users : "create_uid"
+  res_groups }o--|| res_users : "create_uid"
+  res_groups }o--|| res_groups_privilege : "privilege_id"
+  res_groups_implied_rel }o--|| res_groups : "hid"
+  res_groups_privilege }o--|| res_users : "write_uid"
+  res_groups_report_rel }o--|| res_groups : "gid"
+  res_groups_spreadsheet_dashboard_rel }o--|| res_groups : "res_groups_id"
+  res_groups_spreadsheet_document_to_dashboard_rel }o--|| res_groups : "res_groups_id"
+  res_groups_users_rel }o--|| res_users : "uid"
+  res_groups_users_rel }o--|| res_groups : "gid"
+  res_lang }o--|| res_users : "create_uid"
+  res_lang_install_rel }o--|| res_lang : "lang_id"
+  res_partner }o--|| res_users : "user_id"
+  res_partner }o--|| res_city : "city_id"
+  res_partner }o--|| res_partner : "commercial_partner_id"
+  res_partner }o--|| res_company : "company_id"
+  res_partner }o--|| res_country : "country_id"
+  res_partner }o--|| res_partner_industry : "industry_id"
+  res_partner }o--|| res_country_state : "state_id"
+  res_partner_bank }o--|| res_currency : "currency_id"
+  res_partner_bank }o--|| res_company : "company_id"
+  res_partner_bank }o--|| res_users : "write_uid"
+  res_partner_bank }o--|| res_partner : "partner_id"
+  res_partner_bank }o--|| res_bank : "bank_id"
+  res_partner_category }o--|| res_users : "write_uid"
+  res_partner_category }o--|| res_partner_category : "parent_id"
+  res_partner_industry }o--|| res_users : "write_uid"
+  res_partner_res_partner_category_rel }o--|| res_partner : "partner_id"
+  res_partner_res_partner_category_rel }o--|| res_partner_category : "category_id"
+  res_role }o--|| res_users : "create_uid"
+  res_role_res_users_rel }o--|| res_role : "res_role_id"
+  res_role_res_users_rel }o--|| res_users : "res_users_id"
+  res_users }o--|| res_users : "write_uid"
+  res_users }o--|| res_company : "company_id"
+  res_users }o--|| res_partner : "partner_id"
+  res_users_apikeys }o--|| res_users : "user_id"
+  res_users_apikeys_description }o--|| res_users : "write_uid"
+  res_users_deletion }o--|| res_users : "create_uid"
+  res_users_identitycheck }o--|| res_users : "write_uid"
+  res_users_log }o--|| res_users : "create_uid"
+  res_users_settings }o--|| res_users : "user_id"
+  res_users_settings_embedded_action }o--|| res_users : "write_uid"
+  res_users_settings_embedded_action }o--|| res_users_settings : "user_setting_id"
+  res_users_settings_volumes }o--|| res_partner : "partner_id"
+  res_users_settings_volumes }o--|| res_users : "create_uid"
+  res_users_settings_volumes }o--|| res_users_settings : "user_setting_id"
+  res_users_spreadsheet_dashboard_rel }o--|| res_users : "res_users_id"
+  res_users_web_tour_tour_rel }o--|| res_users : "res_users_id"
+</div></div>
+</div>
+<div class="section" id="sec1">
+<h2 onclick="toggle(1)">消息邮件 (mail_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  mail_activity {
+    int id PK
+  }
+  mail_activity_plan {
+    int id PK
+  }
+  mail_activity_plan_mail_activity_schedule_rel {
+    int id PK
+  }
+  mail_activity_plan_template {
+    int id PK
+  }
+  mail_activity_plan_template_mail_activity_type_rel {
+    int id PK
+  }
+  mail_activity_rel {
+    int id PK
+  }
+  mail_activity_schedule {
+    int id PK
+  }
+  mail_activity_schedule_line {
+    int id PK
+  }
+  mail_activity_type {
+    int id PK
+  }
+  mail_activity_type_mail_template_rel {
+    int id PK
+  }
+  mail_alias {
+    int id PK
+  }
+  mail_alias_domain {
+    int id PK
+  }
+  mail_blacklist {
+    int id PK
+  }
+  mail_blacklist_remove {
+    int id PK
+  }
+  mail_canned_response {
+    int id PK
+  }
+  mail_canned_response_res_groups_rel {
+    int id PK
+  }
+  mail_compose_message {
+    int id PK
+  }
+  mail_compose_message_ir_attachments_rel {
+    int id PK
+  }
+  mail_compose_message_res_partner_rel {
+    int id PK
+  }
+  mail_followers {
+    int id PK
+  }
+  mail_followers_edit {
+    int id PK
+  }
+  mail_followers_edit_res_partner_rel {
+    int id PK
+  }
+  mail_followers_mail_message_subtype_rel {
+    int id PK
+  }
+  mail_gateway_allowed {
+    int id PK
+  }
+  mail_guest {
+    int id PK
+  }
+  mail_ice_server {
+    int id PK
+  }
+  mail_link_preview {
+    int id PK
+  }
+  mail_mail {
+    int id PK
+  }
+  mail_mail_res_partner_rel {
+    int id PK
+  }
+  mail_message {
+    int id PK
+  }
+  mail_message_link_preview {
+    int id PK
+  }
+  mail_message_reaction {
+    int id PK
+  }
+  mail_message_res_partner_rel {
+    int id PK
+  }
+  mail_message_res_partner_starred_rel {
+    int id PK
+  }
+  mail_message_schedule {
+    int id PK
+  }
+  mail_message_subtype {
+    int id PK
+  }
+  mail_message_translation {
+    int id PK
+  }
+  mail_notification {
+    int id PK
+  }
+  mail_presence {
+    int id PK
+  }
+  mail_push {
+    int id PK
+  }
+  mail_push_device {
+    int id PK
+  }
+  mail_scheduled_message {
+    int id PK
+  }
+  mail_scheduled_message_res_partner_rel {
+    int id PK
+  }
+  mail_template {
+    int id PK
+  }
+  mail_template_ir_actions_report_rel {
+    int id PK
+  }
+  mail_template_mail_template_reset_rel {
+    int id PK
+  }
+  mail_template_preview {
+    int id PK
+  }
+  mail_template_reset {
+    int id PK
+  }
+  mail_tracking_value {
+    int id PK
+  }
+  mail_activity }o--|| mail_activity_type : "activity_type_id"
+  mail_activity_plan_mail_activity_schedule_rel }o--|| mail_activity_plan : "mail_activity_plan_id"
+  mail_activity_plan_mail_activity_schedule_rel }o--|| mail_activity_schedule : "mail_activity_schedule_id"
+  mail_activity_plan_template }o--|| mail_activity_plan : "plan_id"
+  mail_activity_plan_template }o--|| mail_activity_type : "activity_type_id"
+  mail_activity_plan_template_mail_activity_type_rel }o--|| mail_activity_plan_template : "mail_activity_plan_template_id"
+  mail_activity_plan_template_mail_activity_type_rel }o--|| mail_activity_type : "mail_activity_type_id"
+  mail_activity_rel }o--|| mail_activity_type : "recommended_id"
+  mail_activity_schedule }o--|| mail_activity_plan : "plan_id"
+  mail_activity_schedule }o--|| mail_activity_type : "activity_type_id"
+  mail_activity_schedule_line }o--|| mail_activity_schedule : "activity_schedule_id"
+  mail_activity_type }o--|| mail_activity_type : "triggered_next_type_id"
+  mail_activity_type_mail_template_rel }o--|| mail_activity_type : "mail_activity_type_id"
+  mail_activity_type_mail_template_rel }o--|| mail_template : "mail_template_id"
+  mail_alias }o--|| mail_alias_domain : "alias_domain_id"
+  mail_canned_response_res_groups_rel }o--|| mail_canned_response : "mail_canned_response_id"
+  mail_compose_message }o--|| mail_message_subtype : "subtype_id"
+  mail_compose_message }o--|| mail_template : "template_id"
+  mail_compose_message }o--|| mail_activity_type : "mail_activity_type_id"
+  mail_compose_message }o--|| mail_message : "parent_id"
+  mail_compose_message }o--|| mail_alias_domain : "record_alias_domain_id"
+  mail_compose_message_ir_attachments_rel }o--|| mail_compose_message : "wizard_id"
+  mail_compose_message_res_partner_rel }o--|| mail_compose_message : "wizard_id"
+  mail_followers_edit_res_partner_rel }o--|| mail_followers_edit : "mail_followers_edit_id"
+  mail_followers_mail_message_subtype_rel }o--|| mail_followers : "mail_followers_id"
+  mail_followers_mail_message_subtype_rel }o--|| mail_message_subtype : "mail_message_subtype_id"
+  mail_mail }o--|| mail_message : "mail_message_id"
+  mail_mail_res_partner_rel }o--|| mail_mail : "mail_mail_id"
+  mail_message }o--|| mail_guest : "author_guest_id"
+  mail_message }o--|| mail_activity_type : "mail_activity_type_id"
+  mail_message }o--|| mail_message : "parent_id"
+  mail_message }o--|| mail_alias_domain : "record_alias_domain_id"
+  mail_message }o--|| mail_message_subtype : "subtype_id"
+  mail_message_link_preview }o--|| mail_message : "message_id"
+  mail_message_link_preview }o--|| mail_link_preview : "link_preview_id"
+  mail_message_reaction }o--|| mail_guest : "guest_id"
+  mail_message_reaction }o--|| mail_message : "message_id"
+  mail_message_res_partner_rel }o--|| mail_message : "mail_message_id"
+  mail_message_res_partner_starred_rel }o--|| mail_message : "mail_message_id"
+  mail_message_schedule }o--|| mail_message : "mail_message_id"
+  mail_message_subtype }o--|| mail_message_subtype : "parent_id"
+  mail_message_translation }o--|| mail_message : "message_id"
+  mail_notification }o--|| mail_mail : "mail_mail_id"
+  mail_notification }o--|| mail_message : "mail_message_id"
+  mail_presence }o--|| mail_guest : "guest_id"
+  mail_push }o--|| mail_push_device : "mail_push_device_id"
+  mail_scheduled_message_res_partner_rel }o--|| mail_scheduled_message : "mail_scheduled_message_id"
+  mail_template_ir_actions_report_rel }o--|| mail_template : "mail_template_id"
+  mail_template_mail_template_reset_rel }o--|| mail_template_reset : "mail_template_reset_id"
+  mail_template_mail_template_reset_rel }o--|| mail_template : "mail_template_id"
+  mail_template_preview }o--|| mail_template : "mail_template_id"
+  mail_tracking_value }o--|| mail_message : "mail_message_id"
+</div></div>
+</div>
+<div class="section" id="sec2">
+<h2 onclick="toggle(2)">内部资源 (ir_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  ir_act_client {
+    int id PK
+  }
+  ir_act_report_xml {
+    int id PK
+  }
+  ir_act_server {
+    int id PK
+  }
+  ir_act_server_group_rel {
+    int id PK
+  }
+  ir_act_server_res_partner_rel {
+    int id PK
+  }
+  ir_act_server_webhook_field_rel {
+    int id PK
+  }
+  ir_act_url {
+    int id PK
+  }
+  ir_act_window {
+    int id PK
+  }
+  ir_act_window_group_rel {
+    int id PK
+  }
+  ir_act_window_view {
+    int id PK
+  }
+  ir_actions {
+    int id PK
+  }
+  ir_actions_server_history {
+    int id PK
+  }
+  ir_actions_todo {
+    int id PK
+  }
+  ir_asset {
+    int id PK
+  }
+  ir_attachment {
+    int id PK
+  }
+  ir_config_parameter {
+    int id PK
+  }
+  ir_cron {
+    int id PK
+  }
+  ir_cron_progress {
+    int id PK
+  }
+  ir_cron_trigger {
+    int id PK
+  }
+  ir_default {
+    int id PK
+  }
+  ir_demo {
+    int id PK
+  }
+  ir_demo_failure {
+    int id PK
+  }
+  ir_demo_failure_wizard {
+    int id PK
+  }
+  ir_embedded_actions {
+    int id PK
+  }
+  ir_embedded_actions_res_groups_rel {
+    int id PK
+  }
+  ir_exports {
+    int id PK
+  }
+  ir_exports_line {
+    int id PK
+  }
+  ir_filters {
+    int id PK
+  }
+  ir_filters_res_users_rel {
+    int id PK
+  }
+  ir_mail_server {
+    int id PK
+  }
+  ir_model {
+    int id PK
+  }
+  ir_model_access {
+    int id PK
+  }
+  ir_model_constraint {
+    int id PK
+  }
+  ir_model_data {
+    int id PK
+  }
+  ir_model_fields {
+    int id PK
+  }
+  ir_model_fields_group_rel {
+    int id PK
+  }
+  ir_model_fields_selection {
+    int id PK
+  }
+  ir_model_inherit {
+    int id PK
+  }
+  ir_model_relation {
+    int id PK
+  }
+  ir_model_spreadsheet_dashboard_rel {
+    int id PK
+  }
+  ir_module_category {
+    int id PK
+  }
+  ir_module_module {
+    int id PK
+  }
+  ir_module_module_dependency {
+    int id PK
+  }
+  ir_module_module_exclusion {
+    int id PK
+  }
+  ir_rule {
+    int id PK
+  }
+  ir_sequence {
+    int id PK
+  }
+  ir_sequence_date_range {
+    int id PK
+  }
+  ir_ui_menu {
+    int id PK
+  }
+  ir_ui_menu_group_rel {
+    int id PK
+  }
+  ir_ui_view {
+    int id PK
+  }
+  ir_ui_view_custom {
+    int id PK
+  }
+  ir_ui_view_group_rel {
+    int id PK
+  }
+  ir_act_client }o--|| ir_model : "binding_model_id"
+  ir_act_report_xml }o--|| ir_model : "binding_model_id"
+  ir_act_server }o--|| ir_model : "binding_model_id"
+  ir_act_server }o--|| ir_model_fields : "update_field_id"
+  ir_act_server }o--|| ir_act_server : "parent_id"
+  ir_act_server }o--|| ir_model_fields_selection : "selection_value"
+  ir_act_server }o--|| ir_sequence : "sequence_id"
+  ir_act_server_group_rel }o--|| ir_act_server : "act_id"
+  ir_act_server_res_partner_rel }o--|| ir_act_server : "ir_act_server_id"
+  ir_act_server_webhook_field_rel }o--|| ir_act_server : "server_id"
+  ir_act_server_webhook_field_rel }o--|| ir_model_fields : "field_id"
+  ir_act_url }o--|| ir_model : "binding_model_id"
+  ir_act_window }o--|| ir_ui_view : "view_id"
+  ir_act_window }o--|| ir_model : "binding_model_id"
+  ir_act_window_group_rel }o--|| ir_act_window : "act_id"
+  ir_act_window_view }o--|| ir_act_window : "act_window_id"
+  ir_act_window_view }o--|| ir_ui_view : "view_id"
+  ir_actions }o--|| ir_model : "binding_model_id"
+  ir_actions_server_history }o--|| ir_act_server : "action_id"
+  ir_attachment }o--|| ir_attachment : "original_id"
+  ir_cron }o--|| ir_act_server : "ir_actions_server_id"
+  ir_cron_progress }o--|| ir_cron : "cron_id"
+  ir_cron_trigger }o--|| ir_cron : "cron_id"
+  ir_default }o--|| ir_model_fields : "field_id"
+  ir_demo_failure }o--|| ir_demo_failure_wizard : "wizard_id"
+  ir_demo_failure }o--|| ir_module_module : "module_id"
+  ir_embedded_actions }o--|| ir_act_window : "parent_action_id"
+  ir_embedded_actions_res_groups_rel }o--|| ir_embedded_actions : "ir_embedded_actions_id"
+  ir_exports_line }o--|| ir_exports : "export_id"
+  ir_filters }o--|| ir_embedded_actions : "embedded_action_id"
+  ir_filters_res_users_rel }o--|| ir_filters : "ir_filters_id"
+  ir_model_access }o--|| ir_model : "model_id"
+  ir_model_constraint }o--|| ir_module_module : "module"
+  ir_model_constraint }o--|| ir_model : "model"
+  ir_model_fields }o--|| ir_model : "model_id"
+  ir_model_fields }o--|| ir_model_fields : "related_field_id"
+  ir_model_fields_group_rel }o--|| ir_model_fields : "field_id"
+  ir_model_fields_selection }o--|| ir_model_fields : "field_id"
+  ir_model_inherit }o--|| ir_model : "model_id"
+  ir_model_inherit }o--|| ir_model_fields : "parent_field_id"
+  ir_model_relation }o--|| ir_model : "model"
+  ir_model_relation }o--|| ir_module_module : "module"
+  ir_model_spreadsheet_dashboard_rel }o--|| ir_model : "ir_model_id"
+  ir_module_category }o--|| ir_module_category : "parent_id"
+  ir_module_module }o--|| ir_module_category : "category_id"
+  ir_module_module_dependency }o--|| ir_module_module : "module_id"
+  ir_module_module_exclusion }o--|| ir_module_module : "module_id"
+  ir_rule }o--|| ir_model : "model_id"
+  ir_sequence_date_range }o--|| ir_sequence : "sequence_id"
+  ir_ui_menu }o--|| ir_ui_menu : "parent_id"
+  ir_ui_menu_group_rel }o--|| ir_ui_menu : "menu_id"
+  ir_ui_view }o--|| ir_ui_view : "inherit_id"
+  ir_ui_view_custom }o--|| ir_ui_view : "ref_id"
+  ir_ui_view_group_rel }o--|| ir_ui_view : "view_id"
+</div></div>
+</div>
+<div class="section" id="sec3">
+<h2 onclick="toggle(3)">会计 (account_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  account_account {
+    int id PK
+  }
+  account_account_account_asset_rel {
+    int id PK
+  }
+  account_account_account_auto_reconcile_wizard_rel {
+    int id PK
+  }
+  account_account_account_import_summary_rel {
+    int id PK
+  }
+  account_account_account_merge_wizard_rel {
+    int id PK
+  }
+  account_account_account_tag {
+    int id PK
+  }
+  account_account_exclude_res_currency_provision {
+    int id PK
+  }
+  account_account_fiscal_rate {
+    int id PK
+  }
+  account_account_res_company_rel {
+    int id PK
+  }
+  account_account_tag {
+    int id PK
+  }
+  account_account_tag_account_move_line_rel {
+    int id PK
+  }
+  account_account_tag_account_tax_repartition_line_rel {
+    int id PK
+  }
+  account_account_tag_product_template_rel {
+    int id PK
+  }
+  account_account_tax_default_rel {
+    int id PK
+  }
+  account_accrued_orders_wizard {
+    int id PK
+  }
+  account_analytic_account {
+    int id PK
+  }
+  account_analytic_applicability {
+    int id PK
+  }
+  account_analytic_distribution_model {
+    int id PK
+  }
+  account_analytic_line {
+    int id PK
+  }
+  account_analytic_plan {
+    int id PK
+  }
+  account_asset {
+    int id PK
+  }
+  account_asset_group {
+    int id PK
+  }
+  account_audit_account_status {
+    int id PK
+  }
+  account_auto_reconcile_wizard {
+    int id PK
+  }
+  account_auto_reconcile_wizard_account_move_line_rel {
+    int id PK
+  }
+  account_auto_reconcile_wizard_res_partner_rel {
+    int id PK
+  }
+  account_automatic_entry_wizard {
+    int id PK
+  }
+  account_automatic_entry_wizard_account_move_line_rel {
+    int id PK
+  }
+  account_autopost_bills_wizard {
+    int id PK
+  }
+  account_bank_selection {
+    int id PK
+  }
+  account_bank_statement {
+    int id PK
+  }
+  account_bank_statement_ir_attachment_rel {
+    int id PK
+  }
+  account_bank_statement_line {
+    int id PK
+  }
+  account_bank_statement_line_transient {
+    int id PK
+  }
+  account_batch_error_wizard {
+    int id PK
+  }
+  account_batch_error_wizard_line {
+    int id PK
+  }
+  account_batch_error_wizard_line_account_payment_rel {
+    int id PK
+  }
+  account_batch_payment {
+    int id PK
+  }
+  account_cash_rounding {
+    int id PK
+  }
+  account_change_lock_date {
+    int id PK
+  }
+  account_create_batch_error_wizard {
+    int id PK
+  }
+  account_create_batch_error_wizard_account_payment_rel {
+    int id PK
+  }
+  account_duplicate_transaction_wizard {
+    int id PK
+  }
+  account_financial_year_op {
+    int id PK
+  }
+  account_fiscal_category {
+    int id PK
+  }
+  account_fiscal_position {
+    int id PK
+  }
+  account_fiscal_position_account {
+    int id PK
+  }
+  account_fiscal_position_account_tax_rel {
+    int id PK
+  }
+  account_fiscal_position_res_country_state_rel {
+    int id PK
+  }
+  account_fiscal_year {
+    int id PK
+  }
+  account_followup_followup_line {
+    int id PK
+  }
+  account_followup_followup_line_res_users_rel {
+    int id PK
+  }
+  account_followup_manual_reminder {
+    int id PK
+  }
+  account_followup_manual_reminder_ir_attachment_rel {
+    int id PK
+  }
+  account_followup_missing_information_wizard {
+    int id PK
+  }
+  account_full_reconcile {
+    int id PK
+  }
+  account_group {
+    int id PK
+  }
+  account_import_summary {
+    int id PK
+  }
+  account_import_summary_account_journal_rel {
+    int id PK
+  }
+  account_import_summary_account_move_rel {
+    int id PK
+  }
+  account_import_summary_account_tax_rel {
+    int id PK
+  }
+  account_import_summary_res_partner_rel {
+    int id PK
+  }
+  account_incoterms {
+    int id PK
+  }
+  account_invoice_transaction_rel {
+    int id PK
+  }
+  account_journal {
+    int id PK
+  }
+  account_journal_account_journal_group_rel {
+    int id PK
+  }
+  account_journal_account_reconcile_model_rel {
+    int id PK
+  }
+  account_journal_group {
+    int id PK
+  }
+  account_loan {
+    int id PK
+  }
+  account_loan_close_wizard {
+    int id PK
+  }
+  account_loan_compute_wizard {
+    int id PK
+  }
+  account_loan_line {
+    int id PK
+  }
+  account_lock_exception {
+    int id PK
+  }
+  account_merge_wizard {
+    int id PK
+  }
+  account_merge_wizard_line {
+    int id PK
+  }
+  account_missing_transaction_wizard {
+    int id PK
+  }
+  account_move {
+    int id PK
+  }
+  account_move__account_payment {
+    int id PK
+  }
+  account_move_account_move_send_batch_wizard_rel {
+    int id PK
+  }
+  account_move_account_resequence_wizard_rel {
+    int id PK
+  }
+  account_move_asset_modify_rel {
+    int id PK
+  }
+  account_move_deferred_rel {
+    int id PK
+  }
+  account_move_line {
+    int id PK
+  }
+  account_move_line_account_payment_rel {
+    int id PK
+  }
+  account_move_line_account_reconcile_wizard_rel {
+    int id PK
+  }
+  account_move_line_account_tax_rel {
+    int id PK
+  }
+  account_move_line_asset_modify_rel {
+    int id PK
+  }
+  account_move_line_l10n_us_1099_wizard_rel {
+    int id PK
+  }
+  account_move_reversal {
+    int id PK
+  }
+  account_move_reversal_move {
+    int id PK
+  }
+  account_move_reversal_new_move {
+    int id PK
+  }
+  account_move_send_batch_wizard {
+    int id PK
+  }
+  account_move_send_wizard {
+    int id PK
+  }
+  account_move_send_wizard_res_partner_rel {
+    int id PK
+  }
+  account_move_validate_account_move_rel {
+    int id PK
+  }
+  account_multicurrency_revaluation_wizard {
+    int id PK
+  }
+  account_online_account {
+    int id PK
+  }
+  account_online_link {
+    int id PK
+  }
+  account_partial_reconcile {
+    int id PK
+  }
+  account_payment {
+    int id PK
+  }
+  account_payment_account_bank_statement_line_rel {
+    int id PK
+  }
+  account_payment_method {
+    int id PK
+  }
+  account_payment_method_line {
+    int id PK
+  }
+  account_payment_register {
+    int id PK
+  }
+  account_payment_register_move_line_rel {
+    int id PK
+  }
+  account_payment_term {
+    int id PK
+  }
+  account_payment_term_line {
+    int id PK
+  }
+  account_reconcile_model {
+    int id PK
+  }
+  account_reconcile_model_line {
+    int id PK
+  }
+  account_reconcile_model_line_account_tax_rel {
+    int id PK
+  }
+  account_reconcile_model_res_partner_rel {
+    int id PK
+  }
+  account_reconcile_wizard {
+    int id PK
+  }
+  account_report {
+    int id PK
+  }
+  account_report_account_report_horizontal_group_rel {
+    int id PK
+  }
+  account_report_annotation {
+    int id PK
+  }
+  account_report_budget {
+    int id PK
+  }
+  account_report_budget_item {
+    int id PK
+  }
+  account_report_column {
+    int id PK
+  }
+  account_report_expression {
+    int id PK
+  }
+  account_report_external_value {
+    int id PK
+  }
+  account_report_file_download_error_wizard {
+    int id PK
+  }
+  account_report_horizontal_group {
+    int id PK
+  }
+  account_report_horizontal_group_rule {
+    int id PK
+  }
+  account_report_line {
+    int id PK
+  }
+  account_report_section_rel {
+    int id PK
+  }
+  account_report_send {
+    int id PK
+  }
+  account_report_send_res_partner_rel {
+    int id PK
+  }
+  account_reports_export_wizard {
+    int id PK
+  }
+  account_reports_export_wizard_format {
+    int id PK
+  }
+  account_resequence_wizard {
+    int id PK
+  }
+  account_return {
+    int id PK
+  }
+  account_return_check {
+    int id PK
+  }
+  account_return_check_ir_attachment_rel {
+    int id PK
+  }
+  account_return_check_res_users_rel {
+    int id PK
+  }
+  account_return_check_template {
+    int id PK
+  }
+  account_return_check_template_res_country_rel {
+    int id PK
+  }
+  account_return_creation_wizard {
+    int id PK
+  }
+  account_return_ir_attachment_rel {
+    int id PK
+  }
+  account_return_payment_wizard {
+    int id PK
+  }
+  account_return_res_company_rel {
+    int id PK
+  }
+  account_return_submission_wizard {
+    int id PK
+  }
+  account_return_type {
+    int id PK
+  }
+  account_secure_entries_wizard {
+    int id PK
+  }
+  account_setup_bank_manual_config {
+    int id PK
+  }
+  account_tax {
+    int id PK
+  }
+  account_tax_alternatives {
+    int id PK
+  }
+  account_tax_filiation_rel {
+    int id PK
+  }
+  account_tax_group {
+    int id PK
+  }
+  account_tax_repartition_line {
+    int id PK
+  }
+  account_tax_unit {
+    int id PK
+  }
+  account_tax_unit_res_company_rel {
+    int id PK
+  }
+  account_account }o--|| account_fiscal_category : "fiscal_category_id"
+  account_account_account_asset_rel }o--|| account_account : "account_account_id"
+  account_account_account_asset_rel }o--|| account_asset : "account_asset_id"
+  account_account_account_auto_reconcile_wizard_rel }o--|| account_auto_reconcile_wizard : "account_auto_reconcile_wizard_id"
+  account_account_account_auto_reconcile_wizard_rel }o--|| account_account : "account_account_id"
+  account_account_account_import_summary_rel }o--|| account_import_summary : "account_import_summary_id"
+  account_account_account_import_summary_rel }o--|| account_account : "account_account_id"
+  account_account_account_merge_wizard_rel }o--|| account_account : "account_account_id"
+  account_account_account_merge_wizard_rel }o--|| account_merge_wizard : "account_merge_wizard_id"
+  account_account_account_tag }o--|| account_account : "account_account_id"
+  account_account_account_tag }o--|| account_account_tag : "account_account_tag_id"
+  account_account_exclude_res_currency_provision }o--|| account_account : "account_account_id"
+  account_account_fiscal_rate }o--|| account_account : "related_account_id"
+  account_account_res_company_rel }o--|| account_account : "account_account_id"
+  account_account_tag_account_move_line_rel }o--|| account_account_tag : "account_account_tag_id"
+  account_account_tag_account_move_line_rel }o--|| account_move_line : "account_move_line_id"
+  account_account_tag_account_tax_repartition_line_rel }o--|| account_account_tag : "account_account_tag_id"
+  account_account_tag_account_tax_repartition_line_rel }o--|| account_tax_repartition_line : "account_tax_repartition_line_id"
+  account_account_tag_product_template_rel }o--|| account_account_tag : "account_account_tag_id"
+  account_account_tax_default_rel }o--|| account_account : "account_id"
+  account_account_tax_default_rel }o--|| account_tax : "tax_id"
+  account_accrued_orders_wizard }o--|| account_journal : "journal_id"
+  account_accrued_orders_wizard }o--|| account_account : "account_id"
+  account_analytic_account }o--|| account_analytic_plan : "plan_id"
+  account_analytic_applicability }o--|| account_analytic_plan : "analytic_plan_id"
+  account_analytic_line }o--|| account_account : "general_account_id"
+  account_analytic_line }o--|| account_journal : "journal_id"
+  account_analytic_line }o--|| account_move_line : "move_line_id"
+  account_analytic_line }o--|| account_analytic_account : "account_id"
+  account_analytic_plan }o--|| account_analytic_plan : "parent_id"
+  account_asset }o--|| account_journal : "journal_id"
+  account_asset }o--|| account_asset : "parent_id"
+  account_asset }o--|| account_account : "account_asset_id"
+  account_asset }o--|| account_asset_group : "asset_group_id"
+  account_audit_account_status }o--|| account_account : "account_id"
+  account_audit_account_status }o--|| account_return : "audit_id"
+  account_auto_reconcile_wizard_account_move_line_rel }o--|| account_move_line : "account_move_line_id"
+  account_auto_reconcile_wizard_account_move_line_rel }o--|| account_auto_reconcile_wizard : "account_auto_reconcile_wizard_id"
+  account_auto_reconcile_wizard_res_partner_rel }o--|| account_auto_reconcile_wizard : "account_auto_reconcile_wizard_id"
+  account_automatic_entry_wizard }o--|| account_account : "destination_account_id"
+  account_automatic_entry_wizard_account_move_line_rel }o--|| account_automatic_entry_wizard : "account_automatic_entry_wizard_id"
+  account_automatic_entry_wizard_account_move_line_rel }o--|| account_move_line : "account_move_line_id"
+  account_bank_selection }o--|| account_online_account : "selected_account"
+  account_bank_selection }o--|| account_online_link : "account_online_link_id"
+  account_bank_statement }o--|| account_journal : "journal_id"
+  account_bank_statement_ir_attachment_rel }o--|| account_bank_statement : "account_bank_statement_id"
+  account_bank_statement_line }o--|| account_journal : "journal_id"
+  account_bank_statement_line }o--|| account_move : "move_id"
+  account_bank_statement_line }o--|| account_online_account : "online_account_id"
+  account_bank_statement_line }o--|| account_online_link : "online_link_id"
+  account_bank_statement_line }o--|| account_bank_statement : "statement_id"
+  account_bank_statement_line_transient }o--|| account_journal : "journal_id"
+  account_bank_statement_line_transient }o--|| account_online_account : "online_account_id"
+  account_batch_error_wizard }o--|| account_batch_payment : "batch_payment_id"
+  account_batch_error_wizard_line }o--|| account_batch_error_wizard : "error_wizard_id"
+  account_batch_error_wizard_line_account_payment_rel }o--|| account_payment : "account_payment_id"
+  account_batch_error_wizard_line_account_payment_rel }o--|| account_batch_error_wizard_line : "account_batch_error_wizard_line_id"
+  account_batch_payment }o--|| account_journal : "journal_id"
+  account_batch_payment }o--|| account_payment_method : "payment_method_id"
+  account_create_batch_error_wizard_account_payment_rel }o--|| account_create_batch_error_wizard : "account_create_batch_error_wizard_id"
+  account_create_batch_error_wizard_account_payment_rel }o--|| account_payment : "account_payment_id"
+  account_duplicate_transaction_wizard }o--|| account_journal : "journal_id"
+  account_fiscal_position_account }o--|| account_account : "account_dest_id"
+  account_fiscal_position_account }o--|| account_fiscal_position : "position_id"
+  account_fiscal_position_account_tax_rel }o--|| account_fiscal_position : "account_fiscal_position_id"
+  account_fiscal_position_account_tax_rel }o--|| account_tax : "account_tax_id"
+  account_fiscal_position_res_country_state_rel }o--|| account_fiscal_position : "account_fiscal_position_id"
+  account_followup_followup_line_res_users_rel }o--|| account_followup_followup_line : "account_followup_followup_line_id"
+  account_followup_manual_reminder_ir_attachment_rel }o--|| account_followup_manual_reminder : "account_followup_manual_reminder_id"
+  account_group }o--|| account_group : "parent_id"
+  account_import_summary_account_journal_rel }o--|| account_import_summary : "account_import_summary_id"
+  account_import_summary_account_journal_rel }o--|| account_journal : "account_journal_id"
+  account_import_summary_account_move_rel }o--|| account_import_summary : "account_import_summary_id"
+  account_import_summary_account_move_rel }o--|| account_move : "account_move_id"
+  account_import_summary_account_tax_rel }o--|| account_tax : "account_tax_id"
+  account_import_summary_account_tax_rel }o--|| account_import_summary : "account_import_summary_id"
+  account_import_summary_res_partner_rel }o--|| account_import_summary : "account_import_summary_id"
+  account_invoice_transaction_rel }o--|| account_move : "invoice_id"
+  account_journal }o--|| account_online_account : "account_online_account_id"
+  account_journal }o--|| account_online_link : "account_online_link_id"
+  account_journal }o--|| account_account : "default_account_id"
+  account_journal_account_journal_group_rel }o--|| account_journal : "account_journal_id"
+  account_journal_account_journal_group_rel }o--|| account_journal_group : "account_journal_group_id"
+  account_journal_account_reconcile_model_rel }o--|| account_reconcile_model : "account_reconcile_model_id"
+  account_journal_account_reconcile_model_rel }o--|| account_journal : "account_journal_id"
+  account_loan }o--|| account_asset_group : "asset_group_id"
+  account_loan }o--|| account_account : "long_term_account_id"
+  account_loan }o--|| account_journal : "journal_id"
+  account_loan_close_wizard }o--|| account_loan : "loan_id"
+  account_loan_compute_wizard }o--|| account_loan : "loan_id"
+  account_loan_line }o--|| account_loan : "loan_id"
+  account_merge_wizard_line }o--|| account_merge_wizard : "wizard_id"
+  account_merge_wizard_line }o--|| account_account : "account_id"
+  account_missing_transaction_wizard }o--|| account_journal : "journal_id"
+  account_move }o--|| account_partial_reconcile : "tax_cash_basis_rec_id"
+  account_move }o--|| account_move : "tax_cash_basis_origin_move_id"
+  account_move }o--|| account_bank_statement_line : "suspense_statement_line_id"
+  account_move }o--|| account_payment_method_line : "preferred_payment_method_line_id"
+  account_move }o--|| account_payment : "origin_payment_id"
+  account_move }o--|| account_asset : "asset_id"
+  account_move }o--|| account_return : "closing_return_id"
+  account_move }o--|| account_fiscal_position : "fiscal_position_id"
+  account_move }o--|| account_loan_line : "generating_loan_line_id"
+  account_move }o--|| account_cash_rounding : "invoice_cash_rounding_id"
+  account_move }o--|| account_incoterms : "invoice_incoterm_id"
+  account_move }o--|| account_payment_term : "invoice_payment_term_id"
+  account_move }o--|| account_journal : "journal_id"
+  account_move__account_payment }o--|| account_payment : "payment_id"
+  account_move__account_payment }o--|| account_move : "invoice_id"
+  account_move_account_move_send_batch_wizard_rel }o--|| account_move : "account_move_id"
+  account_move_account_move_send_batch_wizard_rel }o--|| account_move_send_batch_wizard : "account_move_send_batch_wizard_id"
+  account_move_account_resequence_wizard_rel }o--|| account_move : "account_move_id"
+  account_move_account_resequence_wizard_rel }o--|| account_resequence_wizard : "account_resequence_wizard_id"
+  account_move_asset_modify_rel }o--|| account_move : "account_move_id"
+  account_move_deferred_rel }o--|| account_move : "original_move_id"
+  account_move_line }o--|| account_reconcile_model : "reconcile_model_id"
+  account_move_line }o--|| account_account : "account_id"
+  account_move_line }o--|| account_followup_followup_line : "followup_line_id"
+  account_move_line }o--|| account_full_reconcile : "full_reconcile_id"
+  account_move_line }o--|| account_tax : "group_tax_id"
+  account_move_line }o--|| account_journal : "journal_id"
+  account_move_line }o--|| account_move : "move_id"
+  account_move_line }o--|| account_payment : "payment_id"
+  account_move_line }o--|| account_bank_statement : "statement_id"
+  account_move_line }o--|| account_bank_statement_line : "statement_line_id"
+  account_move_line }o--|| account_tax_group : "tax_group_id"
+  account_move_line }o--|| account_tax_repartition_line : "tax_repartition_line_id"
+  account_move_line_account_payment_rel }o--|| account_payment : "account_payment_id"
+  account_move_line_account_payment_rel }o--|| account_move_line : "account_move_line_id"
+  account_move_line_account_reconcile_wizard_rel }o--|| account_reconcile_wizard : "account_reconcile_wizard_id"
+  account_move_line_account_reconcile_wizard_rel }o--|| account_move_line : "account_move_line_id"
+  account_move_line_account_tax_rel }o--|| account_move_line : "account_move_line_id"
+  account_move_line_account_tax_rel }o--|| account_tax : "account_tax_id"
+  account_move_line_asset_modify_rel }o--|| account_move_line : "account_move_line_id"
+  account_move_line_l10n_us_1099_wizard_rel }o--|| account_move_line : "account_move_line_id"
+  account_move_reversal }o--|| account_journal : "journal_id"
+  account_move_reversal_move }o--|| account_move_reversal : "reversal_id"
+  account_move_reversal_move }o--|| account_move : "move_id"
+  account_move_reversal_new_move }o--|| account_move_reversal : "reversal_id"
+  account_move_reversal_new_move }o--|| account_move : "new_move_id"
+  account_move_send_wizard }o--|| account_move : "move_id"
+  account_move_send_wizard_res_partner_rel }o--|| account_move_send_wizard : "account_move_send_wizard_id"
+  account_move_validate_account_move_rel }o--|| account_move : "account_move_id"
+  account_online_account }o--|| account_online_link : "account_online_link_id"
+  account_partial_reconcile }o--|| account_move_line : "credit_move_id"
+  account_partial_reconcile }o--|| account_move : "exchange_move_id"
+  account_partial_reconcile }o--|| account_full_reconcile : "full_reconcile_id"
+  account_payment }o--|| account_payment_method_line : "payment_method_line_id"
+  account_payment }o--|| account_batch_payment : "batch_payment_id"
+  account_payment }o--|| account_account : "destination_account_id"
+  account_payment }o--|| account_journal : "journal_id"
+  account_payment }o--|| account_move : "move_id"
+  account_payment }o--|| account_payment : "paired_internal_transfer_payment_id"
+  account_payment }o--|| account_payment_method : "payment_method_id"
+  account_payment_account_bank_statement_line_rel }o--|| account_bank_statement_line : "account_bank_statement_line_id"
+  account_payment_account_bank_statement_line_rel }o--|| account_payment : "account_payment_id"
+  account_payment_method_line }o--|| account_payment_method : "payment_method_id"
+  account_payment_method_line }o--|| account_account : "payment_account_id"
+  account_payment_method_line }o--|| account_journal : "journal_id"
+  account_payment_register }o--|| account_account : "writeoff_account_id"
+  account_payment_register }o--|| account_journal : "journal_id"
+  account_payment_register }o--|| account_payment_method_line : "payment_method_line_id"
+  account_payment_register_move_line_rel }o--|| account_move_line : "line_id"
+  account_payment_register_move_line_rel }o--|| account_payment_register : "wizard_id"
+  account_payment_term_line }o--|| account_payment_term : "payment_id"
+  account_reconcile_model_line }o--|| account_account : "account_id"
+  account_reconcile_model_line }o--|| account_reconcile_model : "model_id"
+  account_reconcile_model_line_account_tax_rel }o--|| account_reconcile_model_line : "account_reconcile_model_line_id"
+  account_reconcile_model_line_account_tax_rel }o--|| account_tax : "account_tax_id"
+  account_reconcile_model_res_partner_rel }o--|| account_reconcile_model : "account_reconcile_model_id"
+  account_reconcile_wizard }o--|| account_account : "account_id"
+  account_reconcile_wizard }o--|| account_journal : "journal_id"
+  account_reconcile_wizard }o--|| account_tax : "tax_id"
+  account_report }o--|| account_report : "root_report_id"
+  account_report_account_report_horizontal_group_rel }o--|| account_report_horizontal_group : "account_report_horizontal_group_id"
+  account_report_account_report_horizontal_group_rel }o--|| account_report : "account_report_id"
+  account_report_budget_item }o--|| account_report_budget : "budget_id"
+  account_report_budget_item }o--|| account_account : "account_id"
+  account_report_column }o--|| account_report : "report_id"
+  account_report_expression }o--|| account_report_line : "report_line_id"
+  account_report_external_value }o--|| account_report_expression : "target_report_expression_id"
+  account_report_external_value }o--|| account_report_line : "carryover_origin_report_line_id"
+  account_report_horizontal_group_rule }o--|| account_report_horizontal_group : "horizontal_group_id"
+  account_report_line }o--|| account_report : "report_id"
+  account_report_line }o--|| account_report_line : "parent_id"
+  account_report_section_rel }o--|| account_report : "main_report_id"
+  account_report_send }o--|| account_report : "account_report_id"
+  account_report_send_res_partner_rel }o--|| account_report_send : "account_report_send_id"
+  account_reports_export_wizard }o--|| account_report : "report_id"
+  account_reports_export_wizard_format }o--|| account_reports_export_wizard : "export_wizard_id"
+  account_return }o--|| account_return_type : "type_id"
+  account_return }o--|| account_tax_unit : "tax_unit_id"
+  account_return_check }o--|| account_return_check_template : "template_id"
+  account_return_check }o--|| account_return : "return_id"
+  account_return_check_ir_attachment_rel }o--|| account_return_check : "account_return_check_id"
+  account_return_check_res_users_rel }o--|| account_return_check : "account_return_check_id"
+  account_return_check_template }o--|| account_return_type : "return_type"
+  account_return_check_template_res_country_rel }o--|| account_return_check_template : "account_return_check_template_id"
+  account_return_creation_wizard }o--|| account_return_type : "return_type_id"
+  account_return_ir_attachment_rel }o--|| account_return : "account_return_id"
+  account_return_payment_wizard }o--|| account_return : "return_id"
+  account_return_res_company_rel }o--|| account_return : "account_return_id"
+  account_return_submission_wizard }o--|| account_return : "return_id"
+  account_return_type }o--|| account_report : "report_id"
+  account_tax }o--|| account_tax_group : "tax_group_id"
+  account_tax }o--|| account_account : "cash_basis_transition_account_id"
+  account_tax_alternatives }o--|| account_tax : "dest_tax_id"
+  account_tax_filiation_rel }o--|| account_tax : "child_tax"
+  account_tax_group }o--|| account_account : "tax_payable_account_id"
+  account_tax_repartition_line }o--|| account_tax : "tax_id"
+  account_tax_repartition_line }o--|| account_account : "account_id"
+  account_tax_unit_res_company_rel }o--|| account_tax_unit : "account_tax_unit_id"
+</div></div>
+</div>
+<div class="section" id="sec4">
+<h2 onclick="toggle(4)">产品 (product_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  product_attr_exclusion_value_ids_rel {
+    int id PK
+  }
+  product_attribute {
+    int id PK
+  }
+  product_attribute_custom_value {
+    int id PK
+  }
+  product_attribute_product_template_rel {
+    int id PK
+  }
+  product_attribute_value {
+    int id PK
+  }
+  product_attribute_value_product_template_attribute_line_rel {
+    int id PK
+  }
+  product_category {
+    int id PK
+  }
+  product_combo {
+    int id PK
+  }
+  product_combo_item {
+    int id PK
+  }
+  product_combo_product_template_rel {
+    int id PK
+  }
+  product_document {
+    int id PK
+  }
+  product_fetch_image_wizard {
+    int id PK
+  }
+  product_fetch_image_wizard_product_product_rel {
+    int id PK
+  }
+  product_label_layout {
+    int id PK
+  }
+  product_label_layout_product_product_rel {
+    int id PK
+  }
+  product_label_layout_product_template_rel {
+    int id PK
+  }
+  product_pricelist {
+    int id PK
+  }
+  product_pricelist_item {
+    int id PK
+  }
+  product_product {
+    int id PK
+  }
+  product_supplier_taxes_rel {
+    int id PK
+  }
+  product_supplierinfo {
+    int id PK
+  }
+  product_tag {
+    int id PK
+  }
+  product_tag_product_product_rel {
+    int id PK
+  }
+  product_tag_product_template_rel {
+    int id PK
+  }
+  product_tags_table {
+    int id PK
+  }
+  product_taxes_rel {
+    int id PK
+  }
+  product_template {
+    int id PK
+  }
+  product_template_attribute_exclusion {
+    int id PK
+  }
+  product_template_attribute_line {
+    int id PK
+  }
+  product_template_attribute_value {
+    int id PK
+  }
+  product_template_uom_uom_rel {
+    int id PK
+  }
+  product_uom {
+    int id PK
+  }
+  product_variant_combination {
+    int id PK
+  }
+  product_attr_exclusion_value_ids_rel }o--|| product_template_attribute_exclusion : "product_template_attribute_exclusion_id"
+  product_attr_exclusion_value_ids_rel }o--|| product_template_attribute_value : "product_template_attribute_value_id"
+  product_attribute_custom_value }o--|| product_template_attribute_value : "custom_product_template_attribute_value_id"
+  product_attribute_product_template_rel }o--|| product_template : "product_template_id"
+  product_attribute_product_template_rel }o--|| product_attribute : "product_attribute_id"
+  product_attribute_value }o--|| product_attribute : "attribute_id"
+  product_attribute_value_product_template_attribute_line_rel }o--|| product_attribute_value : "product_attribute_value_id"
+  product_attribute_value_product_template_attribute_line_rel }o--|| product_template_attribute_line : "product_template_attribute_line_id"
+  product_category }o--|| product_category : "parent_id"
+  product_combo_item }o--|| product_combo : "combo_id"
+  product_combo_item }o--|| product_product : "product_id"
+  product_combo_product_template_rel }o--|| product_combo : "product_combo_id"
+  product_combo_product_template_rel }o--|| product_template : "product_template_id"
+  product_fetch_image_wizard_product_product_rel }o--|| product_fetch_image_wizard : "product_fetch_image_wizard_id"
+  product_fetch_image_wizard_product_product_rel }o--|| product_product : "product_product_id"
+  product_label_layout }o--|| product_pricelist : "pricelist_id"
+  product_label_layout_product_product_rel }o--|| product_label_layout : "product_label_layout_id"
+  product_label_layout_product_product_rel }o--|| product_product : "product_product_id"
+  product_label_layout_product_template_rel }o--|| product_label_layout : "product_label_layout_id"
+  product_label_layout_product_template_rel }o--|| product_template : "product_template_id"
+  product_pricelist_item }o--|| product_pricelist : "base_pricelist_id"
+  product_pricelist_item }o--|| product_category : "categ_id"
+  product_pricelist_item }o--|| product_product : "product_id"
+  product_pricelist_item }o--|| product_template : "product_tmpl_id"
+  product_product }o--|| product_template : "product_tmpl_id"
+  product_supplier_taxes_rel }o--|| product_template : "prod_id"
+  product_supplierinfo }o--|| product_product : "product_id"
+  product_supplierinfo }o--|| product_template : "product_tmpl_id"
+  product_tag_product_product_rel }o--|| product_tag : "product_tag_id"
+  product_tag_product_product_rel }o--|| product_product : "product_product_id"
+  product_tag_product_template_rel }o--|| product_template : "product_template_id"
+  product_tag_product_template_rel }o--|| product_tag : "product_tag_id"
+  product_taxes_rel }o--|| product_template : "prod_id"
+  product_template }o--|| product_category : "categ_id"
+  product_template_attribute_exclusion }o--|| product_template : "product_tmpl_id"
+  product_template_attribute_exclusion }o--|| product_template_attribute_value : "product_template_attribute_value_id"
+  product_template_attribute_line }o--|| product_attribute : "attribute_id"
+  product_template_attribute_line }o--|| product_template : "product_tmpl_id"
+  product_template_attribute_value }o--|| product_template_attribute_line : "attribute_line_id"
+  product_template_attribute_value }o--|| product_attribute_value : "product_attribute_value_id"
+  product_template_attribute_value }o--|| product_attribute : "attribute_id"
+  product_template_attribute_value }o--|| product_template : "product_tmpl_id"
+  product_template_uom_uom_rel }o--|| product_template : "product_template_id"
+  product_uom }o--|| product_product : "product_id"
+  product_variant_combination }o--|| product_product : "product_product_id"
+  product_variant_combination }o--|| product_template_attribute_value : "product_template_attribute_value_id"
+</div></div>
+</div>
+<div class="section" id="sec5">
+<h2 onclick="toggle(5)">文档管理 (documents_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  account_journal {
+    int id PK
+  }
+  documents_access {
+    int id PK
+  }
+  documents_access_tracking {
+    int id PK
+  }
+  documents_account_folder_setting {
+    int id PK
+  }
+  documents_account_folder_setting_documents_tag_rel {
+    int id PK
+  }
+  documents_document {
+    int id PK
+  }
+  documents_document_documents_link_to_record_wizard_rel {
+    int id PK
+  }
+  documents_document_documents_operation_rel {
+    int id PK
+  }
+  documents_document_documents_sharing_rel {
+    int id PK
+  }
+  documents_document_ir_attachment_rel {
+    int id PK
+  }
+  documents_document_res_users_rel {
+    int id PK
+  }
+  documents_link_to_record_wizard {
+    int id PK
+  }
+  documents_operation {
+    int id PK
+  }
+  documents_redirect {
+    int id PK
+  }
+  documents_request_wizard {
+    int id PK
+  }
+  documents_request_wizard_documents_tag_rel {
+    int id PK
+  }
+  documents_sharing {
+    int id PK
+  }
+  documents_sharing_access {
+    int id PK
+  }
+  documents_sharing_res_partner_rel {
+    int id PK
+  }
+  documents_tag {
+    int id PK
+  }
+  documents_tag_mail_activity_type_rel {
+    int id PK
+  }
+  ir_attachment {
+    int id PK
+  }
+  ir_model {
+    int id PK
+  }
+  mail_activity {
+    int id PK
+  }
+  mail_activity_type {
+    int id PK
+  }
+  mail_alias {
+    int id PK
+  }
+  res_company {
+    int id PK
+  }
+  res_partner {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  documents_access }o--|| documents_document : "document_id"
+  documents_access }o--|| res_partner : "partner_id"
+  documents_access_tracking }o--|| res_users : "user_id"
+  documents_account_folder_setting }o--|| account_journal : "journal_id"
+  documents_account_folder_setting }o--|| res_company : "company_id"
+  documents_account_folder_setting }o--|| res_users : "create_uid"
+  documents_account_folder_setting }o--|| documents_document : "folder_id"
+  documents_account_folder_setting_documents_tag_rel }o--|| documents_tag : "documents_tag_id"
+  documents_account_folder_setting_documents_tag_rel }o--|| documents_account_folder_setting : "documents_account_folder_setting_id"
+  documents_document }o--|| res_users : "write_uid"
+  documents_document }o--|| documents_document : "shortcut_document_id"
+  documents_document }o--|| mail_alias : "alias_id"
+  documents_document }o--|| ir_attachment : "attachment_id"
+  documents_document }o--|| res_company : "company_id"
+  documents_document }o--|| mail_activity_type : "create_activity_type_id"
+  documents_document }o--|| res_partner : "partner_id"
+  documents_document }o--|| mail_activity : "request_activity_id"
+  documents_document_documents_link_to_record_wizard_rel }o--|| documents_link_to_record_wizard : "documents_link_to_record_wizard_id"
+  documents_document_documents_link_to_record_wizard_rel }o--|| documents_document : "documents_document_id"
+  documents_document_documents_operation_rel }o--|| documents_operation : "documents_operation_id"
+  documents_document_documents_operation_rel }o--|| documents_document : "documents_document_id"
+  documents_document_documents_sharing_rel }o--|| documents_sharing : "documents_sharing_id"
+  documents_document_documents_sharing_rel }o--|| documents_document : "documents_document_id"
+  documents_document_ir_attachment_rel }o--|| ir_attachment : "ir_attachment_id"
+  documents_document_ir_attachment_rel }o--|| documents_document : "documents_document_id"
+  documents_document_res_users_rel }o--|| res_users : "res_users_id"
+  documents_document_res_users_rel }o--|| documents_document : "documents_document_id"
+  documents_link_to_record_wizard }o--|| res_users : "create_uid"
+  documents_link_to_record_wizard }o--|| ir_model : "model_id"
+  documents_operation }o--|| ir_attachment : "attachment_id"
+  documents_operation }o--|| res_users : "create_uid"
+  documents_redirect }o--|| documents_document : "document_id"
+  documents_request_wizard }o--|| mail_activity_type : "activity_type_id"
+  documents_request_wizard }o--|| res_users : "create_uid"
+  documents_request_wizard }o--|| documents_document : "folder_id"
+  documents_request_wizard }o--|| res_partner : "partner_id"
+  documents_request_wizard_documents_tag_rel }o--|| documents_request_wizard : "documents_request_wizard_id"
+  documents_request_wizard_documents_tag_rel }o--|| documents_tag : "documents_tag_id"
+  documents_sharing }o--|| res_users : "write_uid"
+  documents_sharing_access }o--|| res_partner : "partner_id"
+  documents_sharing_access }o--|| res_users : "create_uid"
+  documents_sharing_access }o--|| documents_sharing : "documents_sharing_id"
+  documents_sharing_res_partner_rel }o--|| documents_sharing : "documents_sharing_id"
+  documents_sharing_res_partner_rel }o--|| res_partner : "res_partner_id"
+  documents_tag }o--|| res_users : "write_uid"
+  documents_tag_mail_activity_type_rel }o--|| mail_activity_type : "mail_activity_type_id"
+  documents_tag_mail_activity_type_rel }o--|| documents_tag : "documents_tag_id"
+</div></div>
+</div>
+<div class="section" id="sec6">
+<h2 onclick="toggle(6)">支付 (payment_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  account_payment {
+    int id PK
+  }
+  ir_module_module {
+    int id PK
+  }
+  ir_ui_view {
+    int id PK
+  }
+  payment_capture_wizard {
+    int id PK
+  }
+  payment_capture_wizard_payment_transaction_rel {
+    int id PK
+  }
+  payment_country_rel {
+    int id PK
+  }
+  payment_currency_rel {
+    int id PK
+  }
+  payment_link_wizard {
+    int id PK
+  }
+  payment_method {
+    int id PK
+  }
+  payment_method_payment_provider_rel {
+    int id PK
+  }
+  payment_method_res_country_rel {
+    int id PK
+  }
+  payment_method_res_currency_rel {
+    int id PK
+  }
+  payment_provider {
+    int id PK
+  }
+  payment_refund_wizard {
+    int id PK
+  }
+  payment_token {
+    int id PK
+  }
+  payment_transaction {
+    int id PK
+  }
+  res_company {
+    int id PK
+  }
+  res_country {
+    int id PK
+  }
+  res_country_state {
+    int id PK
+  }
+  res_currency {
+    int id PK
+  }
+  res_partner {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  payment_capture_wizard }o--|| res_users : "write_uid"
+  payment_capture_wizard_payment_transaction_rel }o--|| payment_capture_wizard : "payment_capture_wizard_id"
+  payment_capture_wizard_payment_transaction_rel }o--|| payment_transaction : "payment_transaction_id"
+  payment_country_rel }o--|| res_country : "country_id"
+  payment_country_rel }o--|| payment_provider : "payment_id"
+  payment_currency_rel }o--|| res_currency : "currency_id"
+  payment_currency_rel }o--|| payment_provider : "payment_provider_id"
+  payment_link_wizard }o--|| res_users : "write_uid"
+  payment_link_wizard }o--|| res_currency : "currency_id"
+  payment_link_wizard }o--|| res_partner : "partner_id"
+  payment_method }o--|| res_users : "create_uid"
+  payment_method }o--|| payment_method : "primary_payment_method_id"
+  payment_method_payment_provider_rel }o--|| payment_method : "payment_method_id"
+  payment_method_payment_provider_rel }o--|| payment_provider : "payment_provider_id"
+  payment_method_res_country_rel }o--|| payment_method : "payment_method_id"
+  payment_method_res_country_rel }o--|| res_country : "res_country_id"
+  payment_method_res_currency_rel }o--|| res_currency : "res_currency_id"
+  payment_method_res_currency_rel }o--|| payment_method : "payment_method_id"
+  payment_provider }o--|| res_company : "company_id"
+  payment_provider }o--|| res_users : "create_uid"
+  payment_provider }o--|| ir_ui_view : "express_checkout_form_view_id"
+  payment_provider }o--|| ir_module_module : "module_id"
+  payment_refund_wizard }o--|| res_users : "create_uid"
+  payment_refund_wizard }o--|| account_payment : "payment_id"
+  payment_token }o--|| res_company : "company_id"
+  payment_token }o--|| payment_provider : "provider_id"
+  payment_token }o--|| res_users : "write_uid"
+  payment_token }o--|| payment_method : "payment_method_id"
+  payment_token }o--|| res_partner : "partner_id"
+  payment_transaction }o--|| payment_transaction : "source_transaction_id"
+  payment_transaction }o--|| payment_token : "token_id"
+  payment_transaction }o--|| res_partner : "partner_id"
+  payment_transaction }o--|| res_company : "company_id"
+  payment_transaction }o--|| res_users : "create_uid"
+  payment_transaction }o--|| res_currency : "currency_id"
+  payment_transaction }o--|| res_country : "partner_country_id"
+  payment_transaction }o--|| res_country_state : "partner_state_id"
+  payment_transaction }o--|| account_payment : "payment_id"
+  payment_transaction }o--|| payment_method : "payment_method_id"
+  payment_transaction }o--|| payment_provider : "provider_id"
+</div></div>
+</div>
+<div class="section" id="sec7">
+<h2 onclick="toggle(7)">AI (ai_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  ai_agent {
+    int id PK
+  }
+  ai_agent_ai_tool_rel {
+    int id PK
+  }
+  ai_agent_ai_topic_rel {
+    int id PK
+  }
+  ai_agent_source {
+    int id PK
+  }
+  ai_bridge {
+    int id PK
+  }
+  ai_bridge_execution {
+    int id PK
+  }
+  ai_bridge_ir_model_fields_rel {
+    int id PK
+  }
+  ai_bridge_res_groups_rel {
+    int id PK
+  }
+  ai_composer {
+    int id PK
+  }
+  ai_composer_ir_model_rel {
+    int id PK
+  }
+  ai_documents_sort {
+    int id PK
+  }
+  ai_documents_sort_ir_act_server_rel {
+    int id PK
+  }
+  ai_embedding {
+    int id PK
+  }
+  ai_memory {
+    int id PK
+  }
+  ai_prompt_button {
+    int id PK
+  }
+  ai_tool {
+    int id PK
+  }
+  ai_tool_ai_topic_rel {
+    int id PK
+  }
+  ai_tool_ids_rel {
+    int id PK
+  }
+  ai_topic {
+    int id PK
+  }
+  ai_topic_ir_act_server_rel {
+    int id PK
+  }
+  discuss_channel {
+    int id PK
+  }
+  documents_document {
+    int id PK
+  }
+  ir_act_server {
+    int id PK
+  }
+  ir_attachment {
+    int id PK
+  }
+  ir_model {
+    int id PK
+  }
+  ir_model_fields {
+    int id PK
+  }
+  knowledge_article {
+    int id PK
+  }
+  res_company {
+    int id PK
+  }
+  res_groups {
+    int id PK
+  }
+  res_partner {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  ai_agent }o--|| res_partner : "partner_id"
+  ai_agent }o--|| res_users : "write_uid"
+  ai_agent_ai_tool_rel }o--|| ai_tool : "ai_tool_id"
+  ai_agent_ai_tool_rel }o--|| ai_agent : "ai_agent_id"
+  ai_agent_ai_topic_rel }o--|| ai_topic : "ai_topic_id"
+  ai_agent_ai_topic_rel }o--|| ai_agent : "ai_agent_id"
+  ai_agent_source }o--|| ai_agent : "agent_id"
+  ai_agent_source }o--|| knowledge_article : "article_id"
+  ai_agent_source }o--|| ir_attachment : "attachment_id"
+  ai_agent_source }o--|| res_users : "create_uid"
+  ai_agent_source }o--|| documents_document : "document_id"
+  ai_bridge }o--|| res_company : "company_id"
+  ai_bridge }o--|| res_users : "create_uid"
+  ai_bridge }o--|| ir_model : "model_id"
+  ai_bridge_execution }o--|| res_users : "create_uid"
+  ai_bridge_execution }o--|| ai_bridge : "ai_bridge_id"
+  ai_bridge_execution }o--|| res_company : "company_id"
+  ai_bridge_execution }o--|| ir_model : "model_id"
+  ai_bridge_ir_model_fields_rel }o--|| ir_model_fields : "ir_model_fields_id"
+  ai_bridge_ir_model_fields_rel }o--|| ai_bridge : "ai_bridge_id"
+  ai_bridge_res_groups_rel }o--|| res_groups : "res_groups_id"
+  ai_bridge_res_groups_rel }o--|| ai_bridge : "ai_bridge_id"
+  ai_composer }o--|| ai_agent : "ai_agent"
+  ai_composer }o--|| res_users : "create_uid"
+  ai_composer_ir_model_rel }o--|| ir_model : "ir_model_id"
+  ai_composer_ir_model_rel }o--|| ai_composer : "ai_composer_id"
+  ai_documents_sort }o--|| res_users : "write_uid"
+  ai_documents_sort }o--|| documents_document : "folder_id"
+  ai_documents_sort_ir_act_server_rel }o--|| ai_documents_sort : "ai_documents_sort_id"
+  ai_documents_sort_ir_act_server_rel }o--|| ir_act_server : "ir_act_server_id"
+  ai_embedding }o--|| ir_attachment : "attachment_id"
+  ai_embedding }o--|| res_users : "create_uid"
+  ai_memory }o--|| ai_agent : "agent_id"
+  ai_memory }o--|| res_company : "company_id"
+  ai_memory }o--|| res_users : "create_uid"
+  ai_memory }o--|| discuss_channel : "source_channel_id"
+  ai_prompt_button }o--|| res_users : "write_uid"
+  ai_prompt_button }o--|| ai_composer : "composer_id"
+  ai_tool }o--|| res_users : "write_uid"
+  ai_tool }o--|| ir_act_server : "server_action_id"
+  ai_tool_ai_topic_rel }o--|| ai_topic : "ai_topic_id"
+  ai_tool_ai_topic_rel }o--|| ai_tool : "ai_tool_id"
+  ai_tool_ids_rel }o--|| ir_act_server : "tool_id"
+  ai_topic }o--|| res_users : "create_uid"
+  ai_topic_ir_act_server_rel }o--|| ai_topic : "ai_topic_id"
+  ai_topic_ir_act_server_rel }o--|| ir_act_server : "ir_act_server_id"
+</div></div>
+</div>
+<div class="section" id="sec8">
+<h2 onclick="toggle(8)">法律 (lawpad_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  lawpad_fetch_models_line {
+    int id PK
+  }
+  lawpad_fetch_models_wizard {
+    int id PK
+  }
+  lawpad_model {
+    int id PK
+  }
+  lawpad_model_res_company_rel {
+    int id PK
+  }
+  lawpad_provider {
+    int id PK
+  }
+  lawpad_publisher {
+    int id PK
+  }
+  res_company {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  lawpad_fetch_models_line }o--|| lawpad_model : "existing_model_id"
+  lawpad_fetch_models_line }o--|| lawpad_fetch_models_wizard : "wizard_id"
+  lawpad_fetch_models_line }o--|| res_users : "create_uid"
+  lawpad_fetch_models_wizard }o--|| res_users : "create_uid"
+  lawpad_fetch_models_wizard }o--|| lawpad_provider : "provider_id"
+  lawpad_model }o--|| lawpad_publisher : "publisher_id"
+  lawpad_model }o--|| res_users : "create_uid"
+  lawpad_model }o--|| lawpad_provider : "provider_id"
+  lawpad_model_res_company_rel }o--|| res_company : "res_company_id"
+  lawpad_model_res_company_rel }o--|| lawpad_model : "lawpad_model_id"
+  lawpad_provider }o--|| res_users : "write_uid"
+  lawpad_provider }o--|| res_company : "company_id"
+  lawpad_publisher }o--|| res_users : "create_uid"
+</div></div>
+</div>
+<div class="section" id="sec9">
+<h2 onclick="toggle(9)">知识库 (knowledge_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  ir_attachment {
+    int id PK
+  }
+  knowledge_article {
+    int id PK
+  }
+  knowledge_article_favorite {
+    int id PK
+  }
+  knowledge_article_member {
+    int id PK
+  }
+  knowledge_article_stage {
+    int id PK
+  }
+  knowledge_article_template_category {
+    int id PK
+  }
+  knowledge_article_thread {
+    int id PK
+  }
+  knowledge_cover {
+    int id PK
+  }
+  knowledge_invite {
+    int id PK
+  }
+  knowledge_invite_res_partner_rel {
+    int id PK
+  }
+  res_partner {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  knowledge_article }o--|| knowledge_article : "parent_id"
+  knowledge_article }o--|| knowledge_cover : "cover_image_id"
+  knowledge_article }o--|| res_users : "create_uid"
+  knowledge_article }o--|| knowledge_article_template_category : "template_category_id"
+  knowledge_article }o--|| knowledge_article_stage : "stage_id"
+  knowledge_article_favorite }o--|| res_users : "create_uid"
+  knowledge_article_favorite }o--|| knowledge_article : "article_id"
+  knowledge_article_member }o--|| knowledge_article : "article_id"
+  knowledge_article_member }o--|| res_users : "create_uid"
+  knowledge_article_member }o--|| res_partner : "partner_id"
+  knowledge_article_stage }o--|| res_users : "write_uid"
+  knowledge_article_stage }o--|| knowledge_article : "parent_id"
+  knowledge_article_template_category }o--|| res_users : "write_uid"
+  knowledge_article_thread }o--|| knowledge_article : "article_id"
+  knowledge_article_thread }o--|| res_users : "create_uid"
+  knowledge_cover }o--|| res_users : "create_uid"
+  knowledge_cover }o--|| ir_attachment : "attachment_id"
+  knowledge_invite }o--|| knowledge_article : "article_id"
+  knowledge_invite }o--|| res_users : "write_uid"
+  knowledge_invite_res_partner_rel }o--|| res_partner : "res_partner_id"
+  knowledge_invite_res_partner_rel }o--|| knowledge_invite : "knowledge_invite_id"
+</div></div>
+</div>
+<div class="section" id="sec10">
+<h2 onclick="toggle(10)">讨论 (discuss_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  ai_agent {
+    int id PK
+  }
+  discuss_call_history {
+    int id PK
+  }
+  discuss_channel {
+    int id PK
+  }
+  discuss_channel_member {
+    int id PK
+  }
+  discuss_channel_res_groups_rel {
+    int id PK
+  }
+  discuss_channel_rtc_session {
+    int id PK
+  }
+  discuss_gif_favorite {
+    int id PK
+  }
+  discuss_voice_metadata {
+    int id PK
+  }
+  ir_attachment {
+    int id PK
+  }
+  mail_guest {
+    int id PK
+  }
+  mail_message {
+    int id PK
+  }
+  res_groups {
+    int id PK
+  }
+  res_partner {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  discuss_call_history }o--|| res_users : "create_uid"
+  discuss_call_history }o--|| discuss_channel : "channel_id"
+  discuss_call_history }o--|| mail_message : "start_call_message_id"
+  discuss_channel }o--|| res_users : "create_uid"
+  discuss_channel }o--|| mail_message : "from_message_id"
+  discuss_channel }o--|| res_groups : "group_public_id"
+  discuss_channel }o--|| discuss_channel : "parent_channel_id"
+  discuss_channel }o--|| ai_agent : "ai_agent_id"
+  discuss_channel_member }o--|| mail_message : "fetched_message_id"
+  discuss_channel_member }o--|| mail_guest : "guest_id"
+  discuss_channel_member }o--|| res_partner : "partner_id"
+  discuss_channel_member }o--|| discuss_channel_rtc_session : "rtc_inviting_session_id"
+  discuss_channel_member }o--|| res_users : "write_uid"
+  discuss_channel_member }o--|| discuss_channel : "channel_id"
+  discuss_channel_res_groups_rel }o--|| discuss_channel : "discuss_channel_id"
+  discuss_channel_res_groups_rel }o--|| res_groups : "res_groups_id"
+  discuss_channel_rtc_session }o--|| discuss_channel_member : "channel_member_id"
+  discuss_channel_rtc_session }o--|| res_users : "create_uid"
+  discuss_channel_rtc_session }o--|| res_partner : "partner_id"
+  discuss_channel_rtc_session }o--|| discuss_channel : "channel_id"
+  discuss_gif_favorite }o--|| res_users : "create_uid"
+  discuss_voice_metadata }o--|| ir_attachment : "attachment_id"
+  discuss_voice_metadata }o--|| res_users : "create_uid"
+</div></div>
+</div>
+<div class="section" id="sec11">
+<h2 onclick="toggle(11)">电子表格 (spreadsheet_)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  documents_document {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  spreadsheet_cell_thread {
+    int id PK
+  }
+  spreadsheet_contributor {
+    int id PK
+  }
+  spreadsheet_dashboard {
+    int id PK
+  }
+  spreadsheet_dashboard_group {
+    int id PK
+  }
+  spreadsheet_dashboard_share {
+    int id PK
+  }
+  spreadsheet_document_to_dashboard {
+    int id PK
+  }
+  spreadsheet_revision {
+    int id PK
+  }
+  spreadsheet_template {
+    int id PK
+  }
+  spreadsheet_cell_thread }o--|| spreadsheet_template : "template_id"
+  spreadsheet_cell_thread }o--|| spreadsheet_dashboard : "dashboard_id"
+  spreadsheet_cell_thread }o--|| res_users : "write_uid"
+  spreadsheet_cell_thread }o--|| documents_document : "document_id"
+  spreadsheet_contributor }o--|| documents_document : "document_id"
+  spreadsheet_contributor }o--|| res_users : "user_id"
+  spreadsheet_dashboard }o--|| res_users : "create_uid"
+  spreadsheet_dashboard }o--|| spreadsheet_dashboard_group : "dashboard_group_id"
+  spreadsheet_dashboard_group }o--|| res_users : "write_uid"
+  spreadsheet_dashboard_share }o--|| res_users : "write_uid"
+  spreadsheet_dashboard_share }o--|| spreadsheet_dashboard : "dashboard_id"
+  spreadsheet_document_to_dashboard }o--|| spreadsheet_dashboard_group : "dashboard_group_id"
+  spreadsheet_document_to_dashboard }o--|| documents_document : "document_id"
+  spreadsheet_document_to_dashboard }o--|| res_users : "create_uid"
+  spreadsheet_revision }o--|| spreadsheet_revision : "parent_revision_id"
+  spreadsheet_revision }o--|| res_users : "author_id"
+  spreadsheet_template }o--|| res_users : "create_uid"
+</div></div>
+</div>
+<div class="section" id="sec12">
+<h2 onclick="toggle(12)">其他模块</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  account_account {
+    int id PK
+  }
+  account_asset {
+    int id PK
+  }
+  account_move_line {
+    int id PK
+  }
+  asset_modify {
+    int id PK
+  }
+  asset_move_line_rel {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  asset_modify }o--|| account_account : "account_asset_id"
+  asset_modify }o--|| account_asset : "asset_id"
+  asset_modify }o--|| res_users : "create_uid"
+  asset_move_line_rel }o--|| account_asset : "asset_id"
+  asset_move_line_rel }o--|| account_move_line : "line_id"
+</div></div>
+</div>
+<div class="section" id="sec13">
+<h2 onclick="toggle(13)">auth_ (6 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  auth_passkey_key {
+    int id PK
+  }
+  auth_passkey_key_create {
+    int id PK
+  }
+  auth_totp_device {
+    int id PK
+  }
+  auth_totp_rate_limit_log {
+    int id PK
+  }
+  auth_totp_wizard {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  auth_passkey_key }o--|| res_users : "create_uid"
+  auth_passkey_key_create }o--|| res_users : "create_uid"
+  auth_totp_device }o--|| res_users : "user_id"
+  auth_totp_rate_limit_log }o--|| res_users : "write_uid"
+  auth_totp_wizard }o--|| res_users : "create_uid"
+</div></div>
+</div>
+<div class="section" id="sec14">
+<h2 onclick="toggle(14)">base_ (30 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  base_automation {
+    int id PK
+  }
+  base_automation_ir_model_fields_rel {
+    int id PK
+  }
+  base_automation_onchange_fields_rel {
+    int id PK
+  }
+  base_document_layout {
+    int id PK
+  }
+  base_enable_profiling_wizard {
+    int id PK
+  }
+  base_import_import {
+    int id PK
+  }
+  base_import_mapping {
+    int id PK
+  }
+  base_import_module {
+    int id PK
+  }
+  base_language_export {
+    int id PK
+  }
+  base_language_import {
+    int id PK
+  }
+  base_language_install {
+    int id PK
+  }
+  base_module_install_request {
+    int id PK
+  }
+  base_module_install_review {
+    int id PK
+  }
+  base_module_uninstall {
+    int id PK
+  }
+  base_module_uninstall_ir_module_module_rel {
+    int id PK
+  }
+  base_module_update {
+    int id PK
+  }
+  base_module_upgrade {
+    int id PK
+  }
+  base_partner_merge_automatic_wizard {
+    int id PK
+  }
+  base_partner_merge_automatic_wizard_res_partner_rel {
+    int id PK
+  }
+  base_partner_merge_line {
+    int id PK
+  }
+  base_automation }o--|| ir_model_fields : "trg_date_id"
+  base_automation }o--|| res_users : "write_uid"
+  base_automation }o--|| documents_document : "ai_autosort_folder_id"
+  base_automation }o--|| ir_model : "model_id"
+  base_automation }o--|| resource_calendar : "trg_date_calendar_id"
+  base_automation }o--|| ir_model_fields_selection : "trg_selection_field_id"
+  base_automation_ir_model_fields_rel }o--|| ir_model_fields : "ir_model_fields_id"
+  base_automation_ir_model_fields_rel }o--|| base_automation : "base_automation_id"
+  base_automation_onchange_fields_rel }o--|| ir_model_fields : "ir_model_fields_id"
+  base_automation_onchange_fields_rel }o--|| base_automation : "base_automation_id"
+  base_document_layout }o--|| res_company : "company_id"
+  base_document_layout }o--|| res_users : "create_uid"
+  base_document_layout }o--|| report_layout : "report_layout_id"
+  base_enable_profiling_wizard }o--|| res_users : "create_uid"
+  base_import_import }o--|| res_users : "create_uid"
+  base_import_mapping }o--|| res_users : "create_uid"
+  base_import_module }o--|| res_users : "create_uid"
+  base_language_export }o--|| ir_model : "model_id"
+  base_language_export }o--|| res_users : "write_uid"
+  base_language_import }o--|| res_users : "create_uid"
+  base_language_install }o--|| res_users : "create_uid"
+  base_module_install_request }o--|| res_users : "write_uid"
+  base_module_install_request }o--|| ir_module_module : "module_id"
+  base_module_install_review }o--|| res_users : "create_uid"
+  base_module_install_review }o--|| ir_module_module : "module_id"
+  base_module_uninstall }o--|| res_users : "write_uid"
+  base_module_uninstall_ir_module_module_rel }o--|| ir_module_module : "ir_module_module_id"
+  base_module_uninstall_ir_module_module_rel }o--|| base_module_uninstall : "base_module_uninstall_id"
+  base_module_update }o--|| res_users : "create_uid"
+  base_module_upgrade }o--|| res_users : "create_uid"
+  base_partner_merge_automatic_wizard }o--|| res_users : "write_uid"
+  base_partner_merge_automatic_wizard }o--|| base_partner_merge_line : "current_line_id"
+  base_partner_merge_automatic_wizard }o--|| res_partner : "dst_partner_id"
+  base_partner_merge_automatic_wizard_res_partner_rel }o--|| base_partner_merge_automatic_wizard : "base_partner_merge_automatic_wizard_id"
+  base_partner_merge_automatic_wizard_res_partner_rel }o--|| res_partner : "res_partner_id"
+  base_partner_merge_line }o--|| res_users : "create_uid"
+  base_partner_merge_line }o--|| base_partner_merge_automatic_wizard : "wizard_id"
+</div></div>
+</div>
+<div class="section" id="sec15">
+<h2 onclick="toggle(15)">change_ (4 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  change_password_own {
+    int id PK
+  }
+  change_password_user {
+    int id PK
+  }
+  change_password_wizard {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  change_password_own }o--|| res_users : "create_uid"
+  change_password_user }o--|| res_users : "create_uid"
+  change_password_user }o--|| change_password_wizard : "wizard_id"
+  change_password_wizard }o--|| res_users : "create_uid"
+</div></div>
+</div>
+<div class="section" id="sec16">
+<h2 onclick="toggle(16)">digest_ (7 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  digest_digest {
+    int id PK
+  }
+  digest_digest_res_users_rel {
+    int id PK
+  }
+  digest_tip {
+    int id PK
+  }
+  digest_tip_res_users_rel {
+    int id PK
+  }
+  res_company {
+    int id PK
+  }
+  res_groups {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  digest_digest }o--|| res_users : "create_uid"
+  digest_digest }o--|| res_company : "company_id"
+  digest_digest_res_users_rel }o--|| digest_digest : "digest_digest_id"
+  digest_digest_res_users_rel }o--|| res_users : "res_users_id"
+  digest_tip }o--|| res_groups : "group_id"
+  digest_tip }o--|| res_users : "create_uid"
+  digest_tip_res_users_rel }o--|| res_users : "res_users_id"
+  digest_tip_res_users_rel }o--|| digest_tip : "digest_tip_id"
+</div></div>
+</div>
+<div class="section" id="sec17">
+<h2 onclick="toggle(17)">document_ (4 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  document_alias_tag_rel {
+    int id PK
+  }
+  document_tag_rel {
+    int id PK
+  }
+  documents_document {
+    int id PK
+  }
+  documents_tag {
+    int id PK
+  }
+  document_alias_tag_rel }o--|| documents_document : "documents_document_id"
+  document_alias_tag_rel }o--|| documents_tag : "documents_tag_id"
+  document_tag_rel }o--|| documents_document : "documents_document_id"
+  document_tag_rel }o--|| documents_tag : "documents_tag_id"
+</div></div>
+</div>
+<div class="section" id="sec18">
+<h2 onclick="toggle(18)">iap_ (6 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  iap_account {
+    int id PK
+  }
+  iap_account_res_company_rel {
+    int id PK
+  }
+  iap_account_res_users_rel {
+    int id PK
+  }
+  iap_service {
+    int id PK
+  }
+  res_company {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  iap_account }o--|| res_users : "write_uid"
+  iap_account }o--|| iap_service : "service_id"
+  iap_account_res_company_rel }o--|| iap_account : "iap_account_id"
+  iap_account_res_company_rel }o--|| res_company : "res_company_id"
+  iap_account_res_users_rel }o--|| iap_account : "iap_account_id"
+  iap_account_res_users_rel }o--|| res_users : "res_users_id"
+  iap_service }o--|| res_users : "write_uid"
+</div></div>
+</div>
+<div class="section" id="sec19">
+<h2 onclick="toggle(19)">onboarding_ (8 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  onboarding_onboarding {
+    int id PK
+  }
+  onboarding_onboarding_onboarding_onboarding_step_rel {
+    int id PK
+  }
+  onboarding_onboarding_step {
+    int id PK
+  }
+  onboarding_progress {
+    int id PK
+  }
+  onboarding_progress_onboarding_progress_step_rel {
+    int id PK
+  }
+  onboarding_progress_step {
+    int id PK
+  }
+  res_company {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  onboarding_onboarding }o--|| res_users : "write_uid"
+  onboarding_onboarding_onboarding_onboarding_step_rel }o--|| onboarding_onboarding : "onboarding_onboarding_id"
+  onboarding_onboarding_onboarding_onboarding_step_rel }o--|| onboarding_onboarding_step : "onboarding_onboarding_step_id"
+  onboarding_onboarding_step }o--|| res_users : "write_uid"
+  onboarding_progress }o--|| res_users : "write_uid"
+  onboarding_progress }o--|| res_company : "company_id"
+  onboarding_progress }o--|| onboarding_onboarding : "onboarding_id"
+  onboarding_progress_onboarding_progress_step_rel }o--|| onboarding_progress : "onboarding_progress_id"
+  onboarding_progress_onboarding_progress_step_rel }o--|| onboarding_progress_step : "onboarding_progress_step_id"
+  onboarding_progress_step }o--|| res_company : "company_id"
+  onboarding_progress_step }o--|| res_users : "create_uid"
+  onboarding_progress_step }o--|| onboarding_onboarding_step : "step_id"
+</div></div>
+</div>
+<div class="section" id="sec20">
+<h2 onclick="toggle(20)">portal_ (7 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  portal_share {
+    int id PK
+  }
+  portal_share_res_partner_rel {
+    int id PK
+  }
+  portal_wizard {
+    int id PK
+  }
+  portal_wizard_res_partner_rel {
+    int id PK
+  }
+  portal_wizard_user {
+    int id PK
+  }
+  res_partner {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  portal_share }o--|| res_users : "create_uid"
+  portal_share_res_partner_rel }o--|| res_partner : "res_partner_id"
+  portal_share_res_partner_rel }o--|| portal_share : "portal_share_id"
+  portal_wizard }o--|| res_users : "create_uid"
+  portal_wizard_res_partner_rel }o--|| res_partner : "res_partner_id"
+  portal_wizard_res_partner_rel }o--|| portal_wizard : "portal_wizard_id"
+  portal_wizard_user }o--|| res_partner : "partner_id"
+  portal_wizard_user }o--|| portal_wizard : "wizard_id"
+  portal_wizard_user }o--|| res_users : "create_uid"
+</div></div>
+</div>
+<div class="section" id="sec21">
+<h2 onclick="toggle(21)">privacy_ (5 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  ir_model {
+    int id PK
+  }
+  privacy_log {
+    int id PK
+  }
+  privacy_lookup_wizard {
+    int id PK
+  }
+  privacy_lookup_wizard_line {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  privacy_log }o--|| res_users : "user_id"
+  privacy_lookup_wizard }o--|| res_users : "create_uid"
+  privacy_lookup_wizard }o--|| privacy_log : "log_id"
+  privacy_lookup_wizard_line }o--|| privacy_lookup_wizard : "wizard_id"
+  privacy_lookup_wizard_line }o--|| res_users : "write_uid"
+  privacy_lookup_wizard_line }o--|| ir_model : "res_model_id"
+</div></div>
+</div>
+<div class="section" id="sec22">
+<h2 onclick="toggle(22)">qr_ (5 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  account_return {
+    int id PK
+  }
+  qr_code_payment_wizard {
+    int id PK
+  }
+  res_company {
+    int id PK
+  }
+  res_partner_bank {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  qr_code_payment_wizard }o--|| res_partner_bank : "partner_bank_id"
+  qr_code_payment_wizard }o--|| account_return : "return_id"
+  qr_code_payment_wizard }o--|| res_users : "write_uid"
+  qr_code_payment_wizard }o--|| res_company : "company_id"
+</div></div>
+</div>
+<div class="section" id="sec23">
+<h2 onclick="toggle(23)">rel_ (6 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  account_followup_manual_reminder {
+    int id PK
+  }
+  base_language_export {
+    int id PK
+  }
+  ir_module_module {
+    int id PK
+  }
+  rel_followup_manual_reminder_res_partner {
+    int id PK
+  }
+  rel_modules_langexport {
+    int id PK
+  }
+  res_partner {
+    int id PK
+  }
+  rel_followup_manual_reminder_res_partner }o--|| account_followup_manual_reminder : "account_followup_manual_reminder_id"
+  rel_followup_manual_reminder_res_partner }o--|| res_partner : "res_partner_id"
+  rel_modules_langexport }o--|| ir_module_module : "module_id"
+  rel_modules_langexport }o--|| base_language_export : "wiz_id"
+</div></div>
+</div>
+<div class="section" id="sec24">
+<h2 onclick="toggle(24)">report_ (4 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  ir_ui_view {
+    int id PK
+  }
+  report_layout {
+    int id PK
+  }
+  report_paperformat {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  report_layout }o--|| res_users : "write_uid"
+  report_layout }o--|| ir_ui_view : "view_id"
+  report_paperformat }o--|| res_users : "write_uid"
+</div></div>
+</div>
+<div class="section" id="sec25">
+<h2 onclick="toggle(25)">resource_ (6 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  res_company {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  resource_calendar {
+    int id PK
+  }
+  resource_calendar_attendance {
+    int id PK
+  }
+  resource_calendar_leaves {
+    int id PK
+  }
+  resource_resource {
+    int id PK
+  }
+  resource_calendar }o--|| res_users : "create_uid"
+  resource_calendar }o--|| res_company : "company_id"
+  resource_calendar_attendance }o--|| resource_calendar : "calendar_id"
+  resource_calendar_attendance }o--|| res_users : "write_uid"
+  resource_calendar_leaves }o--|| resource_resource : "resource_id"
+  resource_calendar_leaves }o--|| res_users : "write_uid"
+  resource_calendar_leaves }o--|| resource_calendar : "calendar_id"
+  resource_calendar_leaves }o--|| res_company : "company_id"
+  resource_resource }o--|| resource_calendar : "calendar_id"
+  resource_resource }o--|| res_company : "company_id"
+  resource_resource }o--|| res_users : "create_uid"
+</div></div>
+</div>
+<div class="section" id="sec26">
+<h2 onclick="toggle(26)">server_ (4 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  ir_act_server {
+    int id PK
+  }
+  ir_actions_server_history {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  server_action_history_wizard {
+    int id PK
+  }
+  server_action_history_wizard }o--|| ir_actions_server_history : "revision"
+  server_action_history_wizard }o--|| res_users : "write_uid"
+  server_action_history_wizard }o--|| ir_act_server : "action_id"
+</div></div>
+</div>
+<div class="section" id="sec27">
+<h2 onclick="toggle(27)">sms_ (17 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  iap_account {
+    int id PK
+  }
+  ir_act_window {
+    int id PK
+  }
+  ir_model {
+    int id PK
+  }
+  mail_message {
+    int id PK
+  }
+  mail_notification {
+    int id PK
+  }
+  res_partner {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  sms_account_code {
+    int id PK
+  }
+  sms_account_phone {
+    int id PK
+  }
+  sms_account_sender {
+    int id PK
+  }
+  sms_composer {
+    int id PK
+  }
+  sms_sms {
+    int id PK
+  }
+  sms_template {
+    int id PK
+  }
+  sms_template_preview {
+    int id PK
+  }
+  sms_template_reset {
+    int id PK
+  }
+  sms_template_sms_template_reset_rel {
+    int id PK
+  }
+  sms_tracker {
+    int id PK
+  }
+  sms_account_code }o--|| iap_account : "account_id"
+  sms_account_code }o--|| res_users : "create_uid"
+  sms_account_phone }o--|| res_users : "create_uid"
+  sms_account_phone }o--|| iap_account : "account_id"
+  sms_account_sender }o--|| res_users : "create_uid"
+  sms_account_sender }o--|| iap_account : "account_id"
+  sms_composer }o--|| sms_template : "template_id"
+  sms_composer }o--|| res_users : "write_uid"
+  sms_sms }o--|| mail_message : "mail_message_id"
+  sms_sms }o--|| res_partner : "partner_id"
+  sms_sms }o--|| res_users : "write_uid"
+  sms_template }o--|| ir_model : "model_id"
+  sms_template }o--|| ir_act_window : "sidebar_action_id"
+  sms_template }o--|| res_users : "write_uid"
+  sms_template_preview }o--|| sms_template : "sms_template_id"
+  sms_template_preview }o--|| res_users : "create_uid"
+  sms_template_reset }o--|| res_users : "create_uid"
+  sms_template_sms_template_reset_rel }o--|| sms_template_reset : "sms_template_reset_id"
+  sms_template_sms_template_reset_rel }o--|| sms_template : "sms_template_id"
+  sms_tracker }o--|| res_users : "write_uid"
+  sms_tracker }o--|| mail_notification : "mail_notification_id"
+</div></div>
+</div>
+<div class="section" id="sec28">
+<h2 onclick="toggle(28)">snailmail_ (9 表)</h2>
+<div class="mermaid-container"><div class="mermaid">
+erDiagram
+  ir_act_report_xml {
+    int id PK
+  }
+  ir_attachment {
+    int id PK
+  }
+  mail_message {
+    int id PK
+  }
+  res_company {
+    int id PK
+  }
+  res_country {
+    int id PK
+  }
+  res_country_state {
+    int id PK
+  }
+  res_partner {
+    int id PK
+  }
+  res_users {
+    int id PK
+  }
+  snailmail_letter {
+    int id PK
+  }
+  snailmail_letter }o--|| res_country : "country_id"
+  snailmail_letter }o--|| ir_attachment : "attachment_id"
+  snailmail_letter }o--|| res_company : "company_id"
+  snailmail_letter }o--|| res_users : "create_uid"
+  snailmail_letter }o--|| mail_message : "message_id"
+  snailmail_letter }o--|| res_partner : "partner_id"
+  snailmail_letter }o--|| ir_act_report_xml : "report_template"
+  snailmail_letter }o--|| res_country_state : "state_id"
+</div></div>
+</div>
+
+<script>
+mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose', flowchart: { useMaxWidth: true } });
+
+function toggle(id) {
+    const sec = document.getElementById('sec' + id);
+    sec.classList.toggle('collapsed');
+}
+</script>
+</body>
+</html>
