@@ -1,0 +1,4 @@
+=== documents with partner_id ===
+ERROR:  syntax error at or near ","
+LINE 1: SELECT id, partner_id, COALESCE(name-, name- FROM documents_...
+                                             ^
