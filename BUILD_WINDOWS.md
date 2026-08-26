@@ -414,6 +414,27 @@ make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PE
 - 使用 `.sql` 文件存储 SQL 脚本
 - 避免在 PowerShell 中直接嵌套复杂 shell 命令
 
+### 坑 7：`SET search_path` 的 `"$user"` 被 shell 展开
+
+**现象**：
+```
+ERROR:  unterminated quoted identifier at or near """", public;"
+LINE 1: LOAD 'age'; SET search_path = ag_catalog, """, public;
+```
+
+**原因**：PostgreSQL 的 `search_path` 需要字面量 `"$user"`。若把这段 SQL 内联在 `bash -c "..."` 的双引号里，`$user` 会被 bash 当作变量展开为空字符串，导致引号数量错乱。层层 `\\\"` 转义几乎无法写对。
+
+**解决**：**不要在命令行内联含 `"$user"` 的 SQL**，写入 `.sql` 文件后用 `-f` 执行：
+
+```bat
+REM test_cypher.bat —— 正确做法
+"%MSYS2%\usr\bin\bash.exe" -lc "cd \"$(cygpath -u '%~dp0')\" && export PATH=/mingw64/bin:/usr/bin:$PATH && psql -p 5433 -d age_test -f test_cypher.sql 2>&1"
+```
+
+`.sql` 文件里照常写 `SET search_path = ag_catalog, "$user", public;` 即可，不需要任何转义。
+
+> 补充：`SET search_path` 只是为了省略 `ag_catalog.` 前缀，并非必需。单条命令可直接写全限定名，如 `SELECT ag_catalog.create_graph('g');`。
+
 ## 十、文件清单
 
 ```
