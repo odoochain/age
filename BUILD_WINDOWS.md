@@ -302,7 +302,20 @@ SELECT * FROM cypher('company', $$
   MATCH (e:Employee)-[:WORKS_IN]->(d:Department)
   RETURN d.name AS dept, count(e) AS headcount, avg(e.salary) AS avg_salary
 $$) AS (dept agtype, headcount agtype, avg_salary agtype);
+
+-- MERGE ON CREATE / ON MATCH（1.8.0 起支持）
+-- 第一次执行：节点不存在 -> 走 ON CREATE，只设 created
+SELECT * FROM cypher('test_graph', $$
+  MERGE (n:Item {name: 'a'})
+  ON CREATE SET n.created = true
+  ON MATCH SET n.matched = true
+  RETURN n.name, n.created, n.matched
+$$) AS (name agtype, created agtype, matched agtype);
+
+-- 重复执行同一语句：节点已存在 -> 走 ON MATCH，只设 matched
 ```
+
+> **1.8.0 实测结果**：两个子句同时存在时能正确二选一（新建只触发 `ON CREATE`，命中只触发 `ON MATCH`），语义正确。1.7.0 时该功能不可用，属上游 issue #1619，已在 1.8.0 修复。
 
 ## 七、已验证功能
 
@@ -321,12 +334,12 @@ $$) AS (dept agtype, headcount agtype, avg_salary agtype);
 | Map 投影 | ✅ | p {.*, .name} |
 | CASE WHEN | ✅ | 条件分支 |
 | DELETE | ✅ | DETACH DELETE |
+| MERGE ON CREATE/ON MATCH | ✅ | 1.8.0 起支持（上游 issue #1619 修复），1.7.0 不支持 |
 
 ## 八、已知限制
 
 | 限制 | 说明 |
 |------|------|
-| MERGE ON MATCH/ON CREATE | AGE 1.7.0 在此环境不支持（1.8.0 未重新验证） |
 | 内联多 CREATE 关系 | 变量作用域问题，需用 MATCH + CREATE 分开写 |
 | 扩展目标 PG | MSYS2/MinGW 用于编译并运行 AGE；编译出的 `age.dll`/`age--1.7.0.sql` 只能安装到 ABI 匹配的 MSYS2/MinGW PostgreSQL（本流程为 5433），不能直接安装到 Scoop 的 MSVC PostgreSQL |
 | DLL 搜索顺序 | 需手动复制 zlib1.dll 到 binutils 目录 |
@@ -426,4 +439,4 @@ age-source/
 *最近更新：2026-08-26（升级到 AGE 1.8.0：合并 `apache/PG18`，5 处 MinGW 补丁自动保留；新增坑 5/坑 6、pacman 密钥环与代理说明；修正 Scoop 位置为 `d:\programs\scoop` 兼容写法）*
 *编译与运行环境：Windows + MSYS2 MinGW64 + GCC 16.1.0 + PostgreSQL 18.4（MSYS2/MinGW，5433）*
 *Scoop 路径：`SCOOP_ROOT` 优先取 `%SCOOP%`，其次 `d:\programs\scoop`，最后回退 `C:\Users\<用户名>\scoop`*
-*已验证：编译 EXIT_CODE=0、安装 EXIT_CODE=0；Cypher 功能测试待在 5433 实例上执行*
+*已验证：编译 EXIT_CODE=0、安装 EXIT_CODE=0、扩展版本 1.8.0；Cypher 基础功能与 MERGE ON CREATE/ON MATCH 实测通过*
