@@ -1,2 +1,7 @@
 @echo off
-"C:\Program Files\Git\bin\bash.exe" -c "export PATH=/mingw64/bin:/usr/bin:$PATH && psql -p 5433 -d age_test -f D:/dev/lawgraph/age-source/test_cypher.sql 2>&1"
+setlocal
+if defined SCOOP (set "SCOOP_ROOT=%SCOOP%") else if exist "d:\programs\scoop" (set "SCOOP_ROOT=d:\programs\scoop") else (set "SCOOP_ROOT=C:\Users\%USERNAME%\scoop")
+set "MSYS2=%SCOOP_ROOT%\apps\msys2\current"
+set "PATH=%MSYS2%\mingw64\bin;%MSYS2%\usr\bin;%PATH%"
+"%MSYS2%\usr\bin\bash.exe" -lc "export PATH=/mingw64/bin:/usr/bin:$PATH && psql -p 5433 -d age_test -f D:/odoochain/age-source/test_cypher.sql 2>&1"
+endlocal

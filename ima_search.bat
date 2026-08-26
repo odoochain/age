@@ -1,2 +1,4 @@
 @echo off
-"C:\Program Files\Git\bin\bash.exe" D:\dev\lawgraph\age-source\ima_search.sh
+setlocal
+"C:\Program Files\Git\bin\bash.exe" D:\odoochain\age-source\ima_search.sh
+endlocal

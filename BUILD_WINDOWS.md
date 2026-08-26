@@ -25,6 +25,19 @@ Apache AGE 是 PostgreSQL 的图数据库扩展，原生仅支持 Linux/Unix。�
 
 ## 三、环境搭建
 
+> **Scoop 安装位置约定（重要）**
+>
+> 本文用 `SCOOP_ROOT` 表示 Scoop 根目录：
+>
+> | 安装方式 | `SCOOP_ROOT` | MSYS2 完整路径 |
+> |----------|--------------|----------------|
+> | 本机自定义位置 | `d:\programs\scoop` | `d:\programs\scoop\apps\msys2\current` |
+> | 默认用户目录 | `C:\Users\<用户名>\scoop` | `C:\Users\<用户名>\scoop\apps\msys2\current` |
+>
+> 脚本按 `%SCOOP%` → `d:\programs\scoop` → `C:\Users\%USERNAME%\scoop` 的顺序探测。
+>
+> **运行时兼容性（重要）**：AGE 必须安装到与其编译工具链兼容的 PostgreSQL。本文的 `mingw-w64-x86_64-postgresql` 与 AGE 产物面向 MSYS2/MinGW PostgreSQL；不能直接把 MinGW 编译的 `age.dll` 安装到 Scoop 提供的 MSVC PostgreSQL。Scoop 在这里负责安装和管理 MSYS2，实际运行 AGE 时仍需使用 MSYS2/MinGW PostgreSQL；如果只保留 Scoop 的 MSVC PostgreSQL，应改用与 MSVC ABI 匹配的 AGE 构建方式或使用 Docker/Linux。下文的 `SCOOP_ROOT` 指 Scoop 根目录，不代表 PostgreSQL 的 ABI。
+
 ### 3.1 安装 MSYS2
 
 ```powershell
@@ -156,16 +169,24 @@ cp /mingw64/bin/zlib1.dll /mingw64/x86_64-w64-mingw32/bin/zlib1.dll
 
 ```batch
 @echo off
-set PATH=C:\Users\%USERNAME%\scoop\apps\msys2\current\mingw64\bin;C:\Users\%USERNAME%\scoop\apps\msys2\current\mingw64\x86_64-w64-mingw32\bin;C:\Users\%USERNAME%\scoop\apps\msys2\current\usr\bin;%PATH%
+setlocal
+if defined SCOOP (set "SCOOP_ROOT=%SCOOP%") else if exist "d:\programs\scoop" (set "SCOOP_ROOT=d:\programs\scoop") else (set "SCOOP_ROOT=C:\Users\%USERNAME%\scoop")
+set "MSYS2=%SCOOP_ROOT%\apps\msys2\current"
+if not exist "%MSYS2%\usr\bin\bash.exe" (
+  echo ERROR: MSYS2 not found: %MSYS2%
+  exit /b 1
+)
+set "PATH=%MSYS2%\mingw64\bin;%MSYS2%\mingw64\x86_64-w64-mingw32\bin;%MSYS2%\usr\bin;%PATH%"
 cd /d "%~dp0"
-bash -lc "export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && make clean > /tmp/age_clean.log 2>&1 && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl > /tmp/age_build.log 2>&1; echo EXIT_CODE=$? > /tmp/age_exit.txt"
-type C:\Users\%USERNAME%\scoop\apps\msys2\current\tmp\age_exit.txt
+"%MSYS2%\usr\bin\bash.exe" -lc "export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && make clean > /tmp/age_clean.log 2>&1 && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl > /tmp/age_build.log 2>&1; echo EXIT_CODE=$? > /tmp/age_exit.txt"
+type "%MSYS2%\tmp\age_exit.txt"
+endlocal
 ```
 
 ### 5.2 执行编译
 
 ```powershell
-cd D:\dev\lawgraph\age-source
+cd D:\odoochain\age-source
 .\build_mingw.bat
 ```
 
@@ -184,22 +205,32 @@ EXIT_CODE=0
 
 ```batch
 @echo off
-set PATH=C:\Users\%USERNAME%\scoop\apps\msys2\current\mingw64\bin;C:\Users\%USERNAME%\scoop\apps\msys2\current\mingw64\x86_64-w64-mingw32\bin;C:\Users\%USERNAME%\scoop\apps\msys2\current\usr\bin;%PATH%
+setlocal
+if defined SCOOP (set "SCOOP_ROOT=%SCOOP%") else if exist "d:\programs\scoop" (set "SCOOP_ROOT=d:\programs\scoop") else (set "SCOOP_ROOT=C:\Users\%USERNAME%\scoop")
+set "MSYS2=%SCOOP_ROOT%\apps\msys2\current"
+if not exist "%MSYS2%\usr\bin\bash.exe" (
+  echo ERROR: MSYS2 not found: %MSYS2%
+  exit /b 1
+)
+set "PATH=%MSYS2%\mingw64\bin;%MSYS2%\mingw64\x86_64-w64-mingw32\bin;%MSYS2%\usr\bin;%PATH%"
 cd /d "%~dp0"
-bash -lc "export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl install > /tmp/age_install.log 2>&1; echo EXIT_CODE=$? > /tmp/age_install.txt"
-type C:\Users\%USERNAME%\scoop\apps\msys2\current\tmp\age_install.txt
+"%MSYS2%\usr\bin\bash.exe" -lc "export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl install 2>&1; echo EXIT_CODE=$? > /tmp/age_install.txt"
+type "%MSYS2%\tmp\age_install.txt"
+endlocal
 ```
 
 ## 六、运行测试
 
-### 6.1 启动 PostgreSQL（MSYS2 版本）
+### 6.1 启动 PostgreSQL（运行 AGE 的目标实例）
+
+> MSYS2 在本流程中负责 AGE 编译，并提供 ABI 匹配的 MinGW PostgreSQL 运行环境；编译产物不能直接安装到 Scoop 提供的 MSVC PostgreSQL。下文以独立的 MSYS2/MinGW PostgreSQL 实例（5433）为准；如果只保留 Scoop 的 MSVC PostgreSQL，应改用 ABI 匹配的 AGE 构建方式或使用 Docker/Linux。
 
 ```bash
-# 初始化（仅首次）
-initdb -D /tmp/pgdata
+# 初始化（仅首次，使用 MSYS2/MinGW PostgreSQL 的 initdb）
+initdb -D D:/mydata/pgdata
 
-# 启动（使用 5433 端口避免与 scoop PostgreSQL 冲突）
-pg_ctl -D /tmp/pgdata -o '-p 5433' -l /tmp/pgdata/logfile start
+# 启动独立的 MSYS2/MinGW PostgreSQL 实例（5433）
+pg_ctl -D D:/mydata/pgdata -o '-p 5433' -l D:/mydata/pgdata/logfile start
 ```
 
 ### 6.2 加载扩展
@@ -272,7 +303,7 @@ $$) AS (dept agtype, headcount agtype, avg_salary agtype);
 |------|------|
 | MERGE ON MATCH/ON CREATE | AGE 1.7.0 在此环境不支持 |
 | 内联多 CREATE 关系 | 变量作用域问题，需用 MATCH + CREATE 分开写 |
-| 端口冲突 | MSYS2 PG 与 scoop PG 需用不同端口 |
+| 扩展目标 PG | MSYS2/MinGW 用于编译并运行 AGE；编译出的 `age.dll`/`age--1.7.0.sql` 只能安装到 ABI 匹配的 MSYS2/MinGW PostgreSQL（本流程为 5433），不能直接安装到 Scoop 的 MSVC PostgreSQL |
 | DLL 搜索顺序 | 需手动复制 zlib1.dll 到 binutils 目录 |
 
 ## 九、踩坑记录
@@ -292,7 +323,7 @@ ldd /mingw64/x86_64-w64-mingw32/bin/as.exe
 
 ### 坑 2：PGXS 的 BISON/FLEX/PERL 路径错误
 
-**原因**：`pg_config` 返回 MSYS2 编译时缓存的路径（如 `D:\M\msys64`），但实际安装路径不同。
+**原因**：`pg_config` 返回 MSYS2 编译时缓存的路径（如 `D:\M\msys64` 或 `%SCOOP_ROOT%\apps\msys2\current`），与实际安装路径不同。
 
 **解决**：在 make 命令中显式覆盖：
 ```bash
@@ -337,5 +368,6 @@ age-source/
 
 ---
 
-*文档创建时间：2026-06-17*
-*编译环境：Windows + MSYS2 MinGW64 + GCC 16.1.0 + PostgreSQL 18.4*
+*最近更新：2026-08-26（修正 Scoop 安装位置为 `d:\programs\scoop` 兼容写法，统一 AGE 编译、安装和测试脚本）*
+*编译与运行环境：Windows + MSYS2 MinGW64 + GCC 16.1.0 + PostgreSQL 18.4（MSYS2/MinGW，5433）*
+*Scoop 路径：`SCOOP_ROOT` 优先取 `%SCOOP%`（自定义安装如 `d:\programs\scoop`），否则回退 `C:\Users\<用户名>\scoop`*

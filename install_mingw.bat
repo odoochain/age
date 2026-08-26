@@ -1,5 +1,13 @@
 @echo off
-set PATH=C:\Users\mirroam\scoop\apps\msys2\current\mingw64\bin;C:\Users\mirroam\scoop\apps\msys2\current\mingw64\x86_64-w64-mingw32\bin;C:\Users\mirroam\scoop\apps\msys2\current\usr\bin;%PATH%
+setlocal
+if defined SCOOP (set "SCOOP_ROOT=%SCOOP%") else if exist "d:\programs\scoop" (set "SCOOP_ROOT=d:\programs\scoop") else (set "SCOOP_ROOT=C:\Users\%USERNAME%\scoop")
+set "MSYS2=%SCOOP_ROOT%\apps\msys2\current"
+if not exist "%MSYS2%\usr\bin\bash.exe" (
+  echo ERROR: MSYS2 not found: %MSYS2%
+  exit /b 1
+)
+set "PATH=%MSYS2%\mingw64\bin;%MSYS2%\mingw64\x86_64-w64-mingw32\bin;%MSYS2%\usr\bin;%PATH%"
 cd /d "%~dp0"
-bash -lc "export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && cd D:/dev/lawgraph/age-source && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl install 2>&1; echo EXIT_CODE=$? > /tmp/age_install.txt"
-type C:\Users\mirroam\scoop\apps\msys2\current\tmp\age_install.txt
+"%MSYS2%\usr\bin\bash.exe" -lc "export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl install 2>&1; echo EXIT_CODE=$? > /tmp/age_install.txt"
+type "%MSYS2%\tmp\age_install.txt"
+endlocal
