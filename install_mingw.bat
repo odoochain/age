@@ -8,6 +8,6 @@ if not exist "%MSYS2%\usr\bin\bash.exe" (
 )
 set "PATH=%MSYS2%\mingw64\bin;%MSYS2%\mingw64\x86_64-w64-mingw32\bin;%MSYS2%\usr\bin;%PATH%"
 cd /d "%~dp0"
-"%MSYS2%\usr\bin\bash.exe" -lc "export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl install 2>&1; echo EXIT_CODE=$? > /tmp/age_install.txt"
+"%MSYS2%\usr\bin\bash.exe" -lc "cd \"$(cygpath -u '%~dp0')\" && export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl install > /tmp/age_install.log 2>&1; echo EXIT_CODE=$? > /tmp/age_install.txt"
 type "%MSYS2%\tmp\age_install.txt"
 endlocal

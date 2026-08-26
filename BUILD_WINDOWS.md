@@ -1,6 +1,7 @@
-# Apache AGE v1.7.0 在 Windows 上编译运行完整指南
+# Apache AGE v1.8.0 在 Windows 上编译运行完整指南
 
 > 环境：Windows 10/11, PostgreSQL 18.4, MSYS2 MinGW64
+> 版本：AGE 1.8.0（2026-08-26 从 1.7.0 合并 `apache/PG18` 升级并实测编译通过）
 
 ## 一、背景
 
@@ -45,6 +46,22 @@ scoop install msys2
 ```
 
 ### 3.2 安装编译工具链
+
+> **全新 MSYS2 需先初始化密钥环**，否则 pacman 报 `key ... is unknown` / `invalid or corrupted database (PGP signature)`：
+>
+> ```bash
+> pacman-key --init
+> pacman-key --populate msys2
+> pacman -Sy
+> ```
+>
+> **国内网络注意**：如果本机通过代理出网，pacman 需显式设置代理，否则所有镜像"秒失败"（`Could not connect to server`，耗时仅 10ms 级）：
+>
+> ```bash
+> export http_proxy=http://127.0.0.1:10808 https_proxy=http://127.0.0.1:10808
+> ```
+>
+> 实测清华/中科大/阿里镜像在走代理时可能返回 **403**（镜像对代理出口 IP 有限制），此时保留官方 `mirror.msys2.org` 即可，pacman 会自动回退。
 
 在 MSYS2 MinGW64 终端中：
 
@@ -178,10 +195,12 @@ if not exist "%MSYS2%\usr\bin\bash.exe" (
 )
 set "PATH=%MSYS2%\mingw64\bin;%MSYS2%\mingw64\x86_64-w64-mingw32\bin;%MSYS2%\usr\bin;%PATH%"
 cd /d "%~dp0"
-"%MSYS2%\usr\bin\bash.exe" -lc "export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && make clean > /tmp/age_clean.log 2>&1 && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl > /tmp/age_build.log 2>&1; echo EXIT_CODE=$? > /tmp/age_exit.txt"
+"%MSYS2%\usr\bin\bash.exe" -lc "cd \"$(cygpath -u '%~dp0')\" && export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && MAKEARGS='PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl' && make $MAKEARGS clean > /tmp/age_clean.log 2>&1; make $MAKEARGS > /tmp/age_build.log 2>&1; echo EXIT_CODE=$? > /tmp/age_exit.txt"
 type "%MSYS2%\tmp\age_exit.txt"
 endlocal
 ```
+
+> 两个关键点（见坑 5、坑 6）：`clean` 必须带 `PG_CONFIG` 且用 `;` 连接；bash 命令内需 `cd "$(cygpath -u '%~dp0')"`，因为 `-lc` 会切到 home 目录。
 
 ### 5.2 执行编译
 
@@ -195,9 +214,11 @@ cd D:\odoochain\age-source
 EXIT_CODE=0
 ```
 
-生成文件：
-- `age.dll` (~960KB) — 扩展动态库
-- `age--1.7.0.sql` (~113KB) — SQL 安装脚本
+生成文件（1.8.0 实测）：
+- `age.dll` (~1.09MB) — 扩展动态库
+- `age--1.8.0.sql` (~154KB) — SQL 安装脚本
+
+> 文件名由 `age.control` 的 `default_version` 推导（`Makefile` 中 `age_sql = age--$(AGE_CURR_VER).sql`），升级版本后无需手工改 Makefile。
 
 ### 5.3 安装扩展
 
@@ -214,10 +235,14 @@ if not exist "%MSYS2%\usr\bin\bash.exe" (
 )
 set "PATH=%MSYS2%\mingw64\bin;%MSYS2%\mingw64\x86_64-w64-mingw32\bin;%MSYS2%\usr\bin;%PATH%"
 cd /d "%~dp0"
-"%MSYS2%\usr\bin\bash.exe" -lc "export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl install 2>&1; echo EXIT_CODE=$? > /tmp/age_install.txt"
+"%MSYS2%\usr\bin\bash.exe" -lc "cd \"$(cygpath -u '%~dp0')\" && export PATH=/mingw64/bin:/mingw64/x86_64-w64-mingw32/bin:/usr/bin:$PATH && make PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl install > /tmp/age_install.log 2>&1; echo EXIT_CODE=$? > /tmp/age_install.txt"
 type "%MSYS2%\tmp\age_install.txt"
 endlocal
 ```
+
+安装位置（由 `pg_config` 决定）：
+- `age.dll` → `$(pg_config --pkglibdir)/age.dll`
+- `age.control`、`age--1.8.0.sql`、`age--1.7.0--1.8.0.sql` → `$(pg_config --sharedir)/extension/`
 
 ## 六、运行测试
 
@@ -301,7 +326,7 @@ $$) AS (dept agtype, headcount agtype, avg_salary agtype);
 
 | 限制 | 说明 |
 |------|------|
-| MERGE ON MATCH/ON CREATE | AGE 1.7.0 在此环境不支持 |
+| MERGE ON MATCH/ON CREATE | AGE 1.7.0 在此环境不支持（1.8.0 未重新验证） |
 | 内联多 CREATE 关系 | 变量作用域问题，需用 MATCH + CREATE 分开写 |
 | 扩展目标 PG | MSYS2/MinGW 用于编译并运行 AGE；编译出的 `age.dll`/`age--1.7.0.sql` 只能安装到 ABI 匹配的 MSYS2/MinGW PostgreSQL（本流程为 5433），不能直接安装到 Scoop 的 MSVC PostgreSQL |
 | DLL 搜索顺序 | 需手动复制 zlib1.dll 到 binutils 目录 |
@@ -320,6 +345,35 @@ ldd /mingw64/x86_64-w64-mingw32/bin/as.exe
 ```
 
 **解决**：`cp /mingw64/bin/zlib1.dll /mingw64/x86_64-w64-mingw32/bin/`
+
+> **2026-08-26 补充**：不要用 `as.exe --version; echo $?` 判断此问题。实测在工具链完全正常的机器上该命令也返回 `exit=127`（属误报）。可靠判断方式是直接试编译：
+>
+> ```bash
+> printf 'int main(void){return 0;}\n' > /tmp/t.c && gcc /tmp/t.c -o /tmp/t.exe && echo OK
+> ```
+>
+> 应以 `ldd` 是否出现 `not found`、以及上面的试编译结果为准。
+
+### 坑 5：`make clean` 报 "No rule to make target 'clean'"（1.8.0 新增）
+
+**原因**：AGE 1.8.0 重构了 `Makefile`，`clean` 等目标由 PGXS 提供，而 PGXS 只有在传入 `PG_CONFIG` 时才会被正确加载。1.7.0 时代 `make clean` 可裸跑，升级后不行。
+
+**解决**：`clean` 也要带上完整参数，且用 `;` 而非 `&&` 连接（首次构建时没有可清理内容，不应阻断后续编译）：
+
+```bash
+MAKEARGS='PG_CONFIG=/mingw64/bin/pg_config BISON=/usr/bin/bison FLEX=/usr/bin/flex PERL=/mingw64/bin/perl'
+make $MAKEARGS clean; make $MAKEARGS
+```
+
+### 坑 6：`make` 报 "No targets specified and no makefile found"
+
+**原因**：`bash -lc` 是 login shell，启动时会切到用户 home 目录，把 `.bat` 里的 `cd /d "%~dp0"` 覆盖掉，导致 make 在错误目录执行。
+
+**解决**：在 bash 命令内部显式切回脚本目录：
+
+```bat
+"%MSYS2%\usr\bin\bash.exe" -lc "cd \"$(cygpath -u '%~dp0')\" && export PATH=... && make ..."
+```
 
 ### 坑 2：PGXS 的 BISON/FLEX/PERL 路径错误
 
@@ -368,6 +422,8 @@ age-source/
 
 ---
 
-*最近更新：2026-08-26（修正 Scoop 安装位置为 `d:\programs\scoop` 兼容写法，统一 AGE 编译、安装和测试脚本）*
+*文档创建时间：2026-06-17*
+*最近更新：2026-08-26（升级到 AGE 1.8.0：合并 `apache/PG18`，5 处 MinGW 补丁自动保留；新增坑 5/坑 6、pacman 密钥环与代理说明；修正 Scoop 位置为 `d:\programs\scoop` 兼容写法）*
 *编译与运行环境：Windows + MSYS2 MinGW64 + GCC 16.1.0 + PostgreSQL 18.4（MSYS2/MinGW，5433）*
-*Scoop 路径：`SCOOP_ROOT` 优先取 `%SCOOP%`（自定义安装如 `d:\programs\scoop`），否则回退 `C:\Users\<用户名>\scoop`*
+*Scoop 路径：`SCOOP_ROOT` 优先取 `%SCOOP%`，其次 `d:\programs\scoop`，最后回退 `C:\Users\<用户名>\scoop`*
+*已验证：编译 EXIT_CODE=0、安装 EXIT_CODE=0；Cypher 功能测试待在 5433 实例上执行*
