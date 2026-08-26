@@ -1,5 +1,6 @@
 *.o
 *.obj
+*.d
 *.so
 *.dll
 *.a
@@ -21,3 +22,4 @@ __pycache__
 .env.local
 
 drivers/python/build
+*.bc
