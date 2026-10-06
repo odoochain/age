@@ -25,6 +25,7 @@
 #include "miscadmin.h"
 #include "utils/acl.h"
 #include "utils/rls.h"
+#include "utils/snapmgr.h"
 
 #include "catalog/ag_label.h"
 #include "executor/cypher_executor.h"
@@ -148,6 +149,10 @@ static TupleTableSlot *exec_cypher_delete(CustomScanState *node)
          */
         while(true)
         {
+            /* Release CustomScan and EState scratch from the preceding row. */
+            ResetExprContext(econtext);
+            ResetPerTupleExprContext(estate);
+
             /* Process the subtree first */
             Decrement_Estate_CommandId(estate)
             slot = ExecProcNode(node->ss.ps.lefttree);
@@ -167,6 +172,10 @@ static TupleTableSlot *exec_cypher_delete(CustomScanState *node)
     }
     else
     {
+        /* Release CustomScan and EState scratch from the preceding row. */
+        ResetExprContext(econtext);
+        ResetPerTupleExprContext(estate);
+
         /* Process the subtree first */
         Decrement_Estate_CommandId(estate)
         slot = ExecProcNode(node->ss.ps.lefttree);
@@ -300,6 +309,12 @@ static void delete_entity(EState *estate, ResultRelInfo *resultRelInfo,
     saved_resultRels = estate->es_result_relations;
     estate->es_result_relations = &resultRelInfo;
 
+    /*
+     * Initialize generated-column state in the per-tuple context before
+     * lock-mode selection can initialize it in the query context.
+     */
+    init_result_rel_info_generated(resultRelInfo, estate);
+
     lockmode = ExecUpdateLockMode(estate, resultRelInfo);
 
     lock_result = heap_lock_tuple(resultRelInfo->ri_RelationDesc, tuple,
@@ -385,6 +400,10 @@ static void process_delete_list(CustomScanState *node)
     HASHCTL hashctl;
     HTAB *index_cache = NULL;
     HASHCTL idx_hashctl;
+    MemoryContext old_context;
+
+    /* Allocate transient delete state in the per-tuple context. */
+    old_context = MemoryContextSwitchTo(econtext->ecxt_per_tuple_memory);
 
     /* Hash table for caching compiled security quals per label */
     MemSet(&hashctl, 0, sizeof(hashctl));
@@ -516,7 +535,8 @@ static void process_delete_list(CustomScanState *node)
                 if (!found_rls)
                 {
                     entry->qualExprs = setup_security_quals(resultRelInfo, estate, node, CMD_DELETE);
-                    entry->slot = ExecInitExtraTupleSlot(estate, RelationGetDescr(rel), &TTSOpsHeapTuple);
+                    entry->slot = MakeSingleTupleTableSlot(
+                        RelationGetDescr(rel), &TTSOpsHeapTuple);
                 }
 
                 ExecStoreHeapTuple(heap_tuple, entry->slot, false);
@@ -565,9 +585,26 @@ static void process_delete_list(CustomScanState *node)
         destroy_entity_result_rel_info(resultRelInfo);
     }
 
+    /* Release standalone RLS slots before destroying their owning cache. */
+    {
+        HASH_SEQ_STATUS seq;
+        RLSCacheEntry *entry;
+
+        hash_seq_init(&seq, qual_cache);
+        while ((entry = (RLSCacheEntry *)hash_seq_search(&seq)) != NULL)
+        {
+            if (entry->slot != NULL)
+            {
+                ExecDropSingleTupleTableSlot(entry->slot);
+            }
+        }
+    }
+
     /* Clean up the cache */
     hash_destroy(qual_cache);
     hash_destroy(index_cache);
+
+    MemoryContextSwitchTo(old_context);
 }
 
 /*
@@ -644,6 +681,9 @@ static void process_edges_by_index(Oid index_oid,
                 /* Check RLS security quals (USING policy) before delete */
                 if (rls_enabled)
                 {
+                    /* Reset RLS expression scratch for each edge. */
+                    ResetExprContext(econtext);
+
                     if (!check_security_quals(qualExprs, slot, econtext))
                     {
                         ereport(ERROR,
@@ -689,6 +729,29 @@ static void check_for_connected_edges(CustomScanState *node)
         (cypher_delete_custom_scan_state *)node;
     EState *estate = css->css.ss.ps.state;
     char *graph_name = css->delete_data->graph_name;
+    bool pushed_snapshot = false;
+
+    /*
+     * check_for_connected_edges() runs from end_cypher_delete(), i.e. during
+     * executor shutdown (ExecEndPlan), by which point the portal's active
+     * snapshot has already been popped. Evaluating an edge-label RLS policy
+     * whose USING/WITH CHECK qual invokes a function (e.g. a STABLE tenant
+     * accessor) requires an active snapshot: check_security_quals() ->
+     * ExecQual() -> fmgr_sql() -> postquel_start() runs the function's query
+     * with GetActiveSnapshot() and dereferences it unconditionally. With no
+     * snapshot on the stack that is a NULL dereference -> SIGSEGV (#2474).
+     *
+     * Ensure a snapshot is active for the duration of the scan. es_snapshot is
+     * still valid here (the EState is not torn down until after this returns),
+     * and is the correct snapshot for reading connected edges. If an error is
+     * raised mid-scan (e.g. an RLS denial), transaction abort resets the active
+     * snapshot stack, so the unpaired push on that path is cleaned up.
+     */
+    if (!ActiveSnapshotSet())
+    {
+        PushActiveSnapshot(estate->es_snapshot);
+        pushed_snapshot = true;
+    }
 
     /* scans each label from css->edge_labels */
     foreach (lc, css->edge_labels)
@@ -799,6 +862,9 @@ static void check_for_connected_edges(CustomScanState *node)
                         /* Check RLS security quals (USING policy) before delete */
                         if (rls_enabled)
                         {
+                            /* Reset RLS expression scratch for each edge. */
+                            ResetExprContext(econtext);
+
                             /*
                              * For DETACH DELETE, error out if edge RLS check fails.
                              * Unlike normal DELETE which silently skips, we cannot
@@ -833,5 +899,10 @@ static void check_for_connected_edges(CustomScanState *node)
         }
 
         destroy_entity_result_rel_info(resultRelInfo);
+    }
+
+    if (pushed_snapshot)
+    {
+        PopActiveSnapshot();
     }
 }

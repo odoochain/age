@@ -19,7 +19,11 @@
 
 #include "postgres.h"
 
+#include "fmgr.h"
+
 #include "access/heapam.h"
+#include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/namespace.h"
 #include "commands/trigger.h"
 #include "common/hashfn.h"
@@ -31,6 +35,13 @@
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
 #include "utils/builtins.h"
+#include "executor/spi.h"
+#include "lib/stringinfo.h"
+#include "miscadmin.h"
+#include "utils/rls.h"
+#include "utils/acl.h"
+#include "utils/inval.h"
+#include "utils/syscache.h"
 
 #if PG_VERSION_NUM >= 170000
 #include "storage/dsm_registry.h"
@@ -44,6 +55,7 @@
 #include "catalog/ag_graph.h"
 #include "catalog/ag_label.h"
 #include "utils/ag_cache.h"
+#include "utils/ag_guc.h"
 
 
 /* defines */
@@ -51,8 +63,17 @@
 #define VERTEX_HTAB_INITIAL_SIZE 10000
 #define EDGE_HTAB_INITIAL_SIZE 10000
 
-/* Maximum number of graphs tracked for version counting */
-#define AGE_MAX_GRAPHS 128
+/*
+ * Maximum number of graphs tracked for version counting.
+ *
+ * There is no hard limit behind this number. An entry is 16 bytes, so the whole
+ * table is about 4 KB of shared memory, and it is sized for headroom. Because a
+ * slot is released when its graph is dropped, this bounds the graphs that exist
+ * at one time rather than the graphs ever created. Lookups are linear scans of
+ * the slots in use, which is the reason not to raise it much further without
+ * replacing the scan with a hash.
+ */
+#define AGE_MAX_GRAPHS 256
 
 /*
  * Graph version counter entry. Stored in shared memory (DSM or shmem)
@@ -145,6 +166,12 @@ typedef struct GRAPH_global_context
     TransactionId xmin;            /* snapshot fallback: transaction xmin */
     TransactionId xmax;            /* snapshot fallback: transaction xmax */
     CommandId curcid;              /* snapshot fallback: command id */
+    Oid load_as_role;              /* role OID the cache was loaded as (RLS cache key) */
+    bool loaded_rls_enforced;      /* age.enforce_rls_in_traversal value at load */
+    bool vertices_rls_filtered;    /* true if any vertex label was RLS-filtered at load */
+    bool loaded_with_rls;          /* true if any label was loaded through RLS (SPI) */
+    bool security_invalidated;     /* set by ACL/RLS catalog inval callbacks */
+    List *label_table_oids;        /* label table OIDs, for targeted security inval */
     int64 num_loaded_vertices;     /* number of loaded vertices in this graph */
     int64 num_loaded_edges;        /* number of loaded edges in this graph */
     ListGraphId *vertices;         /* vertices for vertex hashtable cleanup */
@@ -207,6 +234,11 @@ static void create_GRAPH_global_hashtables(GRAPH_global_context *ggctx);
 static void load_GRAPH_global_hashtables(GRAPH_global_context *ggctx);
 static void load_vertex_hashtable(GRAPH_global_context *ggctx);
 static void load_edge_hashtable(GRAPH_global_context *ggctx);
+static void enforce_label_table_select_acl(Oid label_table_oid);
+static void register_ggctx_security_callbacks(void);
+static void ggctx_security_relcache_callback(Datum arg, Oid relid);
+static void ggctx_security_syscache_callback(Datum arg, int cacheid,
+                                             uint32 hashvalue);
 static void freeze_GRAPH_global_hashtables(GRAPH_global_context *ggctx);
 static List *get_ag_labels_names(Snapshot snapshot, Oid graph_oid,
                                  char label_type);
@@ -219,6 +251,12 @@ static bool insert_vertex_edge(GRAPH_global_context *ggctx,
 static bool insert_vertex_entry(GRAPH_global_context *ggctx, graphid vertex_id,
                                 Oid vertex_label_table_oid,
                                 ItemPointerData tid);
+static void load_vertex_label_rls(GRAPH_global_context *ggctx,
+                                  Oid vertex_label_table_oid,
+                                  char *vertex_label_name);
+static void load_edge_label_rls(GRAPH_global_context *ggctx,
+                                Oid edge_label_table_oid,
+                                char *edge_label_name);
 /* definitions */
 
 /*
@@ -234,6 +272,43 @@ static bool insert_vertex_entry(GRAPH_global_context *ggctx, graphid vertex_id,
  */
 bool is_ggctx_invalid(GRAPH_global_context *ggctx)
 {
+    /*
+     * Security-relevant cache keys, checked before the version-counter
+     * fast-path below. A cache that applied row-level security is never safe
+     * to reuse across statements: RLS policies can depend on session state
+     * (for example current_setting()) that is not part of the snapshot,
+     * role, or GUC keyed on here. A cache is also role- and GUC-specific
+     * because the SELECT ACL / RLS enforcement performed at load depends on
+     * the current role and on age.enforce_rls_in_traversal. Only graphs that
+     * actually enforced RLS pay the always-rebuild cost; ordinary graphs
+     * fall through to the normal version / snapshot validation below.
+     */
+    if (ggctx->loaded_with_rls)
+    {
+        return true;
+    }
+    if (ggctx->load_as_role != GetUserId() ||
+        ggctx->loaded_rls_enforced != age_enforce_rls_in_traversal)
+    {
+        return true;
+    }
+
+    /*
+     * If enforcement was on at load and a label table's ACL/RLS metadata (or
+     * the reading role's authorization) has since changed, an enforced cache
+     * may reflect stale permissions. The version-counter fast path below only
+     * tracks graph DATA changes, so GRANT/REVOKE, policy or RLS DDL, and role
+     * (BYPASSRLS / membership) changes would otherwise go unnoticed. The
+     * security-invalidation callbacks (register_ggctx_security_callbacks) set
+     * this flag on the relevant catalog invalidations; rebuild so the SELECT
+     * ACL / RLS state is re-evaluated. RLS-loaded caches already rebuild
+     * unconditionally above; non-enforced (GUC off) caches are unaffected.
+     */
+    if (ggctx->loaded_rls_enforced && ggctx->security_invalidated)
+    {
+        return true;
+    }
+
     /* use version counter if DSM or SHMEM mode is active */
     if (version_mode == VERSION_MODE_DSM || version_mode == VERSION_MODE_SHMEM)
     {
@@ -711,6 +786,279 @@ static bool insert_vertex_edge(GRAPH_global_context *ggctx,
     return false;
 }
 
+/*
+ * RLS-aware loader for a single vertex label table.
+ *
+ * Loads (id, ctid) through SPI so the planner applies row-level security
+ * policies (and table/column ACL) for the current role, then inserts each
+ * visible row into the graph's global vertex hashtable. The physical tuple
+ * location (ctid) is stored for the same lazy property fetch the direct-scan
+ * path uses (get_vertex_entry_properties); because only RLS-visible rows are
+ * loaded, that later heap_fetch only ever reads authorized tuples. Used in
+ * place of the direct heap scan when age.enforce_rls_in_traversal is on and RLS
+ * is active on the label table. Rows are fetched in batches so the entire label
+ * table is never materialized at once.
+ */
+static void load_vertex_label_rls(GRAPH_global_context *ggctx,
+                                  Oid vertex_label_table_oid,
+                                  char *vertex_label_name)
+{
+    MemoryContext ggctx_cxt = CurrentMemoryContext;
+    StringInfoData query;
+    SPIPlanPtr plan;
+    Portal portal;
+
+    if (SPI_connect() != SPI_OK_CONNECT)
+    {
+        ereport(ERROR,
+                (errcode(ERRCODE_INTERNAL_ERROR),
+                 errmsg("load_vertex_label_rls: SPI_connect failed")));
+    }
+
+    /*
+     * Build the query text AFTER SPI_connect(): SPI switches to its own
+     * procedure memory context here, so the StringInfo buffer and the
+     * quote_qualified_identifier() result are allocated in that context and
+     * freed by SPI_finish(), instead of leaking into the caller's long-lived
+     * (TopMemoryContext) cache-build context that is re-entered on every RLS
+     * cache rebuild.
+     */
+    initStringInfo(&query);
+    appendStringInfo(&query, "SELECT id, ctid FROM ONLY %s",
+                     quote_qualified_identifier(ggctx->graph_name,
+                                                vertex_label_name));
+
+    plan = SPI_prepare(query.data, 0, NULL);
+    if (plan == NULL)
+    {
+        ereport(ERROR,
+                (errcode(ERRCODE_INTERNAL_ERROR),
+                 errmsg("load_vertex_label_rls: SPI_prepare failed: %s",
+                        SPI_result_code_string(SPI_result))));
+    }
+
+    /* read-only cursor: reuses the active snapshot; RLS applied by planner */
+    portal = SPI_cursor_open(NULL, plan, NULL, NULL, true);
+
+    for (;;)
+    {
+        uint64 row;
+
+        SPI_cursor_fetch(portal, true, 10000);
+
+        if (SPI_processed == 0)
+        {
+            break;
+        }
+
+        for (row = 0; row < SPI_processed; row++)
+        {
+            HeapTuple tuple = SPI_tuptable->vals[row];
+            TupleDesc tupdesc = SPI_tuptable->tupdesc;
+            bool isnull = false;
+            graphid vertex_id;
+            ItemPointer tidptr;
+            ItemPointerData tid;
+            MemoryContext oldctx;
+
+            vertex_id = DatumGetInt64(SPI_getbinval(tuple, tupdesc, 1,
+                                                    &isnull));
+            tidptr = (ItemPointer) DatumGetPointer(SPI_getbinval(tuple, tupdesc,
+                                                                 2, &isnull));
+            /* ctid is never null for a scanned heap tuple; guard defensively */
+            if (isnull || tidptr == NULL)
+            {
+                continue;
+            }
+            tid = *tidptr;
+
+            /* build the entry in the cache's (persistent) memory context */
+            oldctx = MemoryContextSwitchTo(ggctx_cxt);
+            insert_vertex_entry(ggctx, vertex_id, vertex_label_table_oid, tid);
+            MemoryContextSwitchTo(oldctx);
+        }
+
+        SPI_freetuptable(SPI_tuptable);
+    }
+
+    SPI_cursor_close(portal);
+    SPI_finish();
+}
+
+/*
+ * RLS-aware loader for a single edge label table. See load_vertex_label_rls;
+ * this variant additionally loads start_id/end_id and populates the per-vertex
+ * edge lists, exactly like the direct-scan path, storing the ctid for the same
+ * lazy property fetch.
+ */
+static void load_edge_label_rls(GRAPH_global_context *ggctx,
+                                Oid edge_label_table_oid,
+                                char *edge_label_name)
+{
+    MemoryContext ggctx_cxt = CurrentMemoryContext;
+    StringInfoData query;
+    SPIPlanPtr plan;
+    Portal portal;
+
+    if (SPI_connect() != SPI_OK_CONNECT)
+    {
+        ereport(ERROR,
+                (errcode(ERRCODE_INTERNAL_ERROR),
+                 errmsg("load_edge_label_rls: SPI_connect failed")));
+    }
+
+    /*
+     * Build the query text AFTER SPI_connect(); see load_vertex_label_rls for
+     * why (SPI procedure memory context ownership avoids a per-rebuild leak).
+     */
+    initStringInfo(&query);
+    appendStringInfo(&query,
+                     "SELECT id, start_id, end_id, ctid FROM ONLY %s",
+                     quote_qualified_identifier(ggctx->graph_name,
+                                                edge_label_name));
+
+    plan = SPI_prepare(query.data, 0, NULL);
+    if (plan == NULL)
+    {
+        ereport(ERROR,
+                (errcode(ERRCODE_INTERNAL_ERROR),
+                 errmsg("load_edge_label_rls: SPI_prepare failed: %s",
+                        SPI_result_code_string(SPI_result))));
+    }
+
+    /* read-only cursor: reuses the active snapshot; RLS applied by planner */
+    portal = SPI_cursor_open(NULL, plan, NULL, NULL, true);
+
+    for (;;)
+    {
+        uint64 row;
+
+        SPI_cursor_fetch(portal, true, 10000);
+
+        if (SPI_processed == 0)
+        {
+            break;
+        }
+
+        for (row = 0; row < SPI_processed; row++)
+        {
+            HeapTuple tuple = SPI_tuptable->vals[row];
+            TupleDesc tupdesc = SPI_tuptable->tupdesc;
+            bool isnull = false;
+            graphid edge_id;
+            graphid edge_vertex_start_id;
+            graphid edge_vertex_end_id;
+            ItemPointer tidptr;
+            ItemPointerData tid;
+            MemoryContext oldctx;
+
+            edge_id = DatumGetInt64(SPI_getbinval(tuple, tupdesc, 1, &isnull));
+            edge_vertex_start_id = DatumGetInt64(SPI_getbinval(tuple, tupdesc,
+                                                               2, &isnull));
+            edge_vertex_end_id = DatumGetInt64(SPI_getbinval(tuple, tupdesc, 3,
+                                                             &isnull));
+            tidptr = (ItemPointer) DatumGetPointer(SPI_getbinval(tuple, tupdesc,
+                                                                 4, &isnull));
+            /* ctid is never null for a scanned heap tuple; guard defensively */
+            if (isnull || tidptr == NULL)
+            {
+                continue;
+            }
+            tid = *tidptr;
+
+            /*
+             * If a vertex label was RLS-filtered, drop any edge whose start or
+             * end vertex is not visible. This mirrors MATCH's inner-join
+             * behavior and avoids leaving a dangling edge in the cache.
+             */
+            if (ggctx->vertices_rls_filtered &&
+                (get_vertex_entry(ggctx, edge_vertex_start_id) == NULL ||
+                 get_vertex_entry(ggctx, edge_vertex_end_id) == NULL))
+            {
+                continue;
+            }
+
+            /* build the entries in the cache's (persistent) memory context */
+            oldctx = MemoryContextSwitchTo(ggctx_cxt);
+            insert_edge_entry(ggctx, edge_id, tid, edge_vertex_start_id,
+                              edge_vertex_end_id, edge_label_table_oid);
+            insert_vertex_edge(ggctx, edge_vertex_start_id,
+                               edge_vertex_end_id, edge_id, edge_label_name);
+            MemoryContextSwitchTo(oldctx);
+        }
+
+        SPI_freetuptable(SPI_tuptable);
+    }
+
+    SPI_cursor_close(portal);
+    SPI_finish();
+}
+
+/*
+ * Enforce table-level SELECT privilege on a graph label table before it is read
+ * by the low-level heap scans in the loaders below.
+ *
+ * Those scans bypass the executor, which is what normally enforces SELECT ACLs.
+ * Without this a role could read rows of a label table it has no SELECT
+ * privilege on through a VLE / traversal. The RLS half of that is handled
+ * separately by routing RLS-enabled labels through an SPI load
+ * (which the planner filters). This helper runs before both load paths: it is
+ * the only SELECT-ACL check on the raw fast path (used when RLS is not enabled),
+ * and a harmless early check before the SPI path (which the planner ACL-checks
+ * anyway). Gated by the same GUC as RLS enforcement so operators retain a
+ * single escape hatch.
+ */
+static void enforce_label_table_select_acl(Oid label_table_oid)
+{
+    if (!age_enforce_rls_in_traversal)
+    {
+        return;
+    }
+
+    /*
+     * table_open() / table_beginscan() below do not verify SELECT privilege -
+     * the executor normally does - so check it explicitly here.
+     *
+     * pg_class_aclcheck() only covers relation-level SELECT. PostgreSQL also
+     * allows column-level SELECT grants, which the executor (and therefore the
+     * RLS/SPI load path) honors. The loaders read every user column of the
+     * label table, so when the relation-level check fails, fall back to
+     * requiring SELECT on each live user column; this keeps the fast-path check
+     * consistent with what the executor would permit instead of over-denying a
+     * role that was granted the columns individually.
+     */
+    if (pg_class_aclcheck(label_table_oid, GetUserId(), ACL_SELECT) !=
+        ACLCHECK_OK)
+    {
+        Relation rel = table_open(label_table_oid, AccessShareLock);
+        TupleDesc tupdesc = RelationGetDescr(rel);
+        int i;
+
+        for (i = 0; i < tupdesc->natts; i++)
+        {
+            Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
+
+            /* skip dropped and system columns */
+            if (attr->attisdropped || attr->attnum <= 0)
+            {
+                continue;
+            }
+
+            if (pg_attribute_aclcheck(label_table_oid, attr->attnum,
+                                      GetUserId(), ACL_SELECT) != ACLCHECK_OK)
+            {
+                table_close(rel, AccessShareLock);
+                ereport(ERROR,
+                        (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+                         errmsg("permission denied for table %s",
+                                get_rel_name(label_table_oid))));
+            }
+        }
+
+        table_close(rel, AccessShareLock);
+    }
+}
+
 /* helper routine to load all vertices into the GRAPH global vertex hashtable */
 static void load_vertex_hashtable(GRAPH_global_context *ggctx)
 {
@@ -728,69 +1076,127 @@ static void load_vertex_hashtable(GRAPH_global_context *ggctx)
     /* get the names of all of the vertex label tables */
     vertex_label_names = get_ag_labels_names(snapshot, graph_oid,
                                              LABEL_TYPE_VERTEX);
-    /* go through all vertex label tables in list */
-    foreach (lc, vertex_label_names)
+    /*
+     * The scan below enforces the SELECT ACL (and, when RLS is active on a
+     * label, loads it via SPI) and can therefore throw. get_ag_labels_names()
+     * built this list in TopMemoryContext (backend lifetime), so free it on
+     * the error path as well; otherwise a repeatedly-failing rebuild - for
+     * example a role retrying a VLE on a label it cannot read - leaks the
+     * list on every attempt.
+     */
+    PG_TRY();
     {
-        Relation graph_vertex_label;
-        TableScanDesc scan_desc;
-        HeapTuple tuple;
-        char *vertex_label_name;
-        Oid vertex_label_table_oid;
-        TupleDesc tupdesc;
-
-        /* get the vertex label name */
-        vertex_label_name = lfirst(lc);
-        /* get the vertex label name's OID */
-        vertex_label_table_oid = get_relname_relid(vertex_label_name,
-                                                   graph_namespace_oid);
-        /* open the relation (table) and begin the scan */
-        graph_vertex_label = table_open(vertex_label_table_oid, AccessShareLock);
-        scan_desc = table_beginscan(graph_vertex_label, snapshot, 0, NULL);
-        /* get the tupdesc - we don't need to release this one */
-        tupdesc = RelationGetDescr(graph_vertex_label);
-        /* bail if the number of columns differs */
-        if (tupdesc->natts != 2)
+        /* go through all vertex label tables in list */
+        foreach (lc, vertex_label_names)
         {
-            ereport(ERROR,
-                    (errcode(ERRCODE_UNDEFINED_TABLE),
-                     errmsg("Invalid number of attributes for %s.%s",
-                     ggctx->graph_name, vertex_label_name)));
-        }
-        /* get all tuples in table and insert them into graph hashtables */
-        while((tuple = heap_getnext(scan_desc, ForwardScanDirection)) != NULL)
-        {
-            graphid vertex_id;
-            bool inserted = false;
+            Relation graph_vertex_label;
+            TableScanDesc scan_desc;
+            HeapTuple tuple;
+            char *vertex_label_name;
+            Oid vertex_label_table_oid;
+            TupleDesc tupdesc;
 
-            /* something is wrong if this isn't true */
-            if (!HeapTupleIsValid(tuple))
+            /* get the vertex label name */
+            vertex_label_name = lfirst(lc);
+            /* get the vertex label name's OID */
+            vertex_label_table_oid = get_relname_relid(vertex_label_name,
+                                                       graph_namespace_oid);
+            /*
+             * Record this label table OID so the security-invalidation callbacks
+             * can target this graph when the label's ACL/RLS metadata changes.
+             */
+            ggctx->label_table_oids =
+                list_append_unique_oid(ggctx->label_table_oids,
+                                       vertex_label_table_oid);
+            /*
+             * Enforce SELECT privilege before any read of this label table
+             * (covers the raw heap-scan fast path below, which bypasses the
+             * executor's ACL check). No-op when the enforcement GUC is off.
+             */
+            enforce_label_table_select_acl(vertex_label_table_oid);
+            /*
+             * When RLS is active on this label for the current role, load it via
+             * SPI so the planner enforces the policies, then skip the direct
+             * scan below.
+             */
+            if (age_enforce_rls_in_traversal &&
+                check_enable_rls(vertex_label_table_oid, InvalidOid, true) ==
+                    RLS_ENABLED)
             {
-                elog(ERROR, "load_vertex_hashtable: !HeapTupleIsValid");
+                load_vertex_label_rls(ggctx, vertex_label_table_oid,
+                                      vertex_label_name);
+                /*
+                 * A vertex label was RLS-filtered, so the visible vertex set may
+                 * be a subset of what the edges reference. Remember this so the
+                 * edge loaders can drop edges whose endpoints are not visible.
+                 */
+                ggctx->vertices_rls_filtered = true;
+                ggctx->loaded_with_rls = true;
+                continue;
             }
-            Assert(HeapTupleIsValid(tuple));
-
-            /* get the vertex id */
-            vertex_id = DatumGetInt64(column_get_datum(tupdesc, tuple, 0, "id",
-                                                       GRAPHIDOID, true));
-
-            /* insert vertex into vertex hashtable with TID (no property copy) */
-            inserted = insert_vertex_entry(ggctx, vertex_id,
-                                           vertex_label_table_oid,
-                                           tuple->t_self);
-
-            /* warn if there is a duplicate */
-            if (!inserted)
+            /* open the relation (table) and begin the scan */
+            graph_vertex_label = table_open(vertex_label_table_oid, AccessShareLock);
+            scan_desc = table_beginscan(graph_vertex_label, snapshot, 0, NULL);
+            /* get the tupdesc - we don't need to release this one */
+            tupdesc = RelationGetDescr(graph_vertex_label);
+            /* bail if the number of columns differs */
+            if (tupdesc->natts != 2)
             {
-                 ereport(WARNING,
-                         (errcode(ERRCODE_DATA_EXCEPTION),
-                          errmsg("ignored duplicate vertex")));
+                ereport(ERROR,
+                        (errcode(ERRCODE_UNDEFINED_TABLE),
+                         errmsg("Invalid number of attributes for %s.%s",
+                         ggctx->graph_name, vertex_label_name)));
             }
-        }
+            /* get all tuples in table and insert them into graph hashtables */
+            while((tuple = heap_getnext(scan_desc, ForwardScanDirection)) != NULL)
+            {
+                graphid vertex_id;
+                bool inserted = false;
 
-        /* end the scan and close the relation */
-        table_endscan(scan_desc);
-        table_close(graph_vertex_label, AccessShareLock);
+                /* something is wrong if this isn't true */
+                if (!HeapTupleIsValid(tuple))
+                {
+                    elog(ERROR, "load_vertex_hashtable: !HeapTupleIsValid");
+                }
+                Assert(HeapTupleIsValid(tuple));
+
+                /* get the vertex id */
+                vertex_id = DatumGetInt64(column_get_datum(tupdesc, tuple, 0, "id",
+                                                           GRAPHIDOID, true));
+
+                /* insert vertex into vertex hashtable with TID (no property copy) */
+                inserted = insert_vertex_entry(ggctx, vertex_id,
+                                               vertex_label_table_oid,
+                                               tuple->t_self);
+
+                /* warn if there is a duplicate */
+                if (!inserted)
+                {
+                     ereport(WARNING,
+                             (errcode(ERRCODE_DATA_EXCEPTION),
+                              errmsg("ignored duplicate vertex")));
+                }
+            }
+
+            /* end the scan and close the relation */
+            table_endscan(scan_desc);
+            table_close(graph_vertex_label, AccessShareLock);
+        }
     }
+    PG_CATCH();
+    {
+        list_free_deep(vertex_label_names);
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
+
+    /*
+     * Free the transient list of label names (and the palloc'd Name entries)
+     * returned by get_ag_labels_names(). The global graph context is built in
+     * TopMemoryContext, so this list would otherwise persist for the life of
+     * the backend and accumulate on every rebuild.
+     */
+    list_free_deep(vertex_label_names);
 }
 
 /*
@@ -830,94 +1236,157 @@ static void load_edge_hashtable(GRAPH_global_context *ggctx)
     /* get the names of all of the edge label tables */
     edge_label_names = get_ag_labels_names(snapshot, graph_oid,
                                            LABEL_TYPE_EDGE);
-    /* go through all edge label tables in list */
-    foreach (lc, edge_label_names)
+    /*
+     * The scan below enforces the SELECT ACL (and, when RLS is active on a
+     * label, loads it via SPI) and can therefore throw. get_ag_labels_names()
+     * built this list in TopMemoryContext (backend lifetime), so free it on
+     * the error path as well; otherwise a repeatedly-failing rebuild - for
+     * example a role retrying a VLE on a label it cannot read - leaks the
+     * list on every attempt.
+     */
+    PG_TRY();
     {
-        Relation graph_edge_label;
-        TableScanDesc scan_desc;
-        HeapTuple tuple;
-        char *edge_label_name;
-        Oid edge_label_table_oid;
-        TupleDesc tupdesc;
-
-        /* get the edge label name */
-        edge_label_name = lfirst(lc);
-        /* get the edge label name's OID */
-        edge_label_table_oid = get_relname_relid(edge_label_name,
-                                                 graph_namespace_oid);
-        /* open the relation (table) and begin the scan */
-        graph_edge_label = table_open(edge_label_table_oid, AccessShareLock);
-        scan_desc = table_beginscan(graph_edge_label, snapshot, 0, NULL);
-        /* get the tupdesc - we don't need to release this one */
-        tupdesc = RelationGetDescr(graph_edge_label);
-        /* bail if the number of columns differs */
-        if (tupdesc->natts != 4)
+        /* go through all edge label tables in list */
+        foreach (lc, edge_label_names)
         {
-            ereport(ERROR,
-                    (errcode(ERRCODE_UNDEFINED_TABLE),
-                     errmsg("Invalid number of attributes for %s.%s",
-                     ggctx->graph_name, edge_label_name)));
+            Relation graph_edge_label;
+            TableScanDesc scan_desc;
+            HeapTuple tuple;
+            char *edge_label_name;
+            Oid edge_label_table_oid;
+            TupleDesc tupdesc;
+
+            /* get the edge label name */
+            edge_label_name = lfirst(lc);
+            /* get the edge label name's OID */
+            edge_label_table_oid = get_relname_relid(edge_label_name,
+                                                     graph_namespace_oid);
+            /*
+             * Record this label table OID so the security-invalidation callbacks
+             * can target this graph when the label's ACL/RLS metadata changes.
+             */
+            ggctx->label_table_oids =
+                list_append_unique_oid(ggctx->label_table_oids,
+                                       edge_label_table_oid);
+            /*
+             * Enforce SELECT privilege before any read of this label table
+             * (covers the raw heap-scan fast path below, which bypasses the
+             * executor's ACL check). No-op when the enforcement GUC is off.
+             */
+            enforce_label_table_select_acl(edge_label_table_oid);
+            /*
+             * When RLS is active on this label for the current role, load it via
+             * SPI so the planner enforces the policies, then skip the direct
+             * scan below.
+             */
+            if (age_enforce_rls_in_traversal &&
+                check_enable_rls(edge_label_table_oid, InvalidOid, true) ==
+                    RLS_ENABLED)
+            {
+                load_edge_label_rls(ggctx, edge_label_table_oid, edge_label_name);
+                ggctx->loaded_with_rls = true;
+                continue;
+            }
+            /* open the relation (table) and begin the scan */
+            graph_edge_label = table_open(edge_label_table_oid, AccessShareLock);
+            scan_desc = table_beginscan(graph_edge_label, snapshot, 0, NULL);
+            /* get the tupdesc - we don't need to release this one */
+            tupdesc = RelationGetDescr(graph_edge_label);
+            /* bail if the number of columns differs */
+            if (tupdesc->natts != 4)
+            {
+                ereport(ERROR,
+                        (errcode(ERRCODE_UNDEFINED_TABLE),
+                         errmsg("Invalid number of attributes for %s.%s",
+                         ggctx->graph_name, edge_label_name)));
+            }
+            /* get all tuples in table and insert them into graph hashtables */
+            while((tuple = heap_getnext(scan_desc, ForwardScanDirection)) != NULL)
+            {
+                graphid edge_id;
+                graphid edge_vertex_start_id;
+                graphid edge_vertex_end_id;
+                bool inserted = false;
+
+                /* something is wrong if this isn't true */
+                if (!HeapTupleIsValid(tuple))
+                {
+                    elog(ERROR, "load_edge_hashtable: !HeapTupleIsValid");
+                }
+                Assert(HeapTupleIsValid(tuple));
+
+                /* get the edge id */
+                edge_id = DatumGetInt64(column_get_datum(tupdesc, tuple, 0, "id",
+                                                         GRAPHIDOID, true));
+                /* get the edge start_id (start vertex id) */
+                edge_vertex_start_id = DatumGetInt64(column_get_datum(tupdesc,
+                                                                      tuple, 1,
+                                                                      "start_id",
+                                                                      GRAPHIDOID,
+                                                                      true));
+                /* get the edge end_id (end vertex id)*/
+                edge_vertex_end_id = DatumGetInt64(column_get_datum(tupdesc, tuple,
+                                                                    2, "end_id",
+                                                                    GRAPHIDOID,
+                                                                    true));
+
+                /*
+                 * If a vertex label was RLS-filtered, drop any edge whose start
+                 * or end vertex is not visible (mirrors MATCH's inner-join
+                 * behavior).
+                 */
+                if (ggctx->vertices_rls_filtered &&
+                    (get_vertex_entry(ggctx, edge_vertex_start_id) == NULL ||
+                     get_vertex_entry(ggctx, edge_vertex_end_id) == NULL))
+                {
+                    continue;
+                }
+
+                /* insert edge into edge hashtable with TID (no property copy) */
+                inserted = insert_edge_entry(ggctx, edge_id, tuple->t_self,
+                                             edge_vertex_start_id,
+                                             edge_vertex_end_id,
+                                             edge_label_table_oid);
+
+                /* warn if there is a duplicate */
+                if (!inserted)
+                {
+                     ereport(WARNING,
+                             (errcode(ERRCODE_DATA_EXCEPTION),
+                              errmsg("ignored duplicate edge")));
+                }
+
+                /* insert the edge into the start and end vertices edge lists */
+                inserted = insert_vertex_edge(ggctx, edge_vertex_start_id,
+                                              edge_vertex_end_id, edge_id,
+                                              edge_label_name);
+                if (!inserted)
+                {
+                     ereport(WARNING,
+                             (errcode(ERRCODE_DATA_EXCEPTION),
+                              errmsg("ignored malformed or dangling edge")));
+                }
+            }
+
+            /* end the scan and close the relation */
+            table_endscan(scan_desc);
+            table_close(graph_edge_label, AccessShareLock);
         }
-        /* get all tuples in table and insert them into graph hashtables */
-        while((tuple = heap_getnext(scan_desc, ForwardScanDirection)) != NULL)
-        {
-            graphid edge_id;
-            graphid edge_vertex_start_id;
-            graphid edge_vertex_end_id;
-            bool inserted = false;
-
-            /* something is wrong if this isn't true */
-            if (!HeapTupleIsValid(tuple))
-            {
-                elog(ERROR, "load_edge_hashtable: !HeapTupleIsValid");
-            }
-            Assert(HeapTupleIsValid(tuple));
-
-            /* get the edge id */
-            edge_id = DatumGetInt64(column_get_datum(tupdesc, tuple, 0, "id",
-                                                     GRAPHIDOID, true));
-            /* get the edge start_id (start vertex id) */
-            edge_vertex_start_id = DatumGetInt64(column_get_datum(tupdesc,
-                                                                  tuple, 1,
-                                                                  "start_id",
-                                                                  GRAPHIDOID,
-                                                                  true));
-            /* get the edge end_id (end vertex id)*/
-            edge_vertex_end_id = DatumGetInt64(column_get_datum(tupdesc, tuple,
-                                                                2, "end_id",
-                                                                GRAPHIDOID,
-                                                                true));
-
-            /* insert edge into edge hashtable with TID (no property copy) */
-            inserted = insert_edge_entry(ggctx, edge_id, tuple->t_self,
-                                         edge_vertex_start_id,
-                                         edge_vertex_end_id,
-                                         edge_label_table_oid);
-
-            /* warn if there is a duplicate */
-            if (!inserted)
-            {
-                 ereport(WARNING,
-                         (errcode(ERRCODE_DATA_EXCEPTION),
-                          errmsg("ignored duplicate edge")));
-            }
-
-            /* insert the edge into the start and end vertices edge lists */
-            inserted = insert_vertex_edge(ggctx, edge_vertex_start_id,
-                                          edge_vertex_end_id, edge_id,
-                                          edge_label_name);
-            if (!inserted)
-            {
-                 ereport(WARNING,
-                         (errcode(ERRCODE_DATA_EXCEPTION),
-                          errmsg("ignored malformed or dangling edge")));
-            }
-        }
-
-        /* end the scan and close the relation */
-        table_endscan(scan_desc);
-        table_close(graph_edge_label, AccessShareLock);
     }
+    PG_CATCH();
+    {
+        list_free_deep(edge_label_names);
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
+
+    /*
+     * Free the transient list of label names (and the palloc'd Name entries)
+     * returned by get_ag_labels_names(). The global graph context is built in
+     * TopMemoryContext, so this list would otherwise persist for the life of
+     * the backend and accumulate on every rebuild.
+     */
+    list_free_deep(edge_label_names);
 }
 
 /*
@@ -948,6 +1417,10 @@ static bool free_specific_GRAPH_global_context(GRAPH_global_context *ggctx)
     /* free the graph name */
     pfree_if_not_null(ggctx->graph_name);
     ggctx->graph_name = NULL;
+
+    /* free the label table OID list used for security invalidation */
+    list_free(ggctx->label_table_oids);
+    ggctx->label_table_oids = NULL;
 
     ggctx->graph_oid = InvalidOid;
     ggctx->next = NULL;
@@ -1013,13 +1486,84 @@ static bool free_specific_GRAPH_global_context(GRAPH_global_context *ggctx)
 }
 
 /*
+ * Security-invalidation callbacks for the global-graph cache.
+ *
+ * The version-counter fast path in is_ggctx_invalid only tracks graph DATA
+ * changes, so a cache built under enforcement (direct scan + SELECT ACL, no RLS)
+ * would keep serving rows after a GRANT/REVOKE, a policy/RLS DDL change, or a
+ * role authorization change, because none of those bump the data version. These
+ * callbacks mark such caches stale on the relevant catalog invalidations;
+ * is_ggctx_invalid then rebuilds and re-evaluates authorization.
+ */
+
+/*
+ * Relcache invalidation. Table-level (pg_class) and column-level (pg_attribute)
+ * SELECT ACL changes, CREATE/ALTER/DROP POLICY, and ENABLE/DISABLE/FORCE ROW
+ * LEVEL SECURITY all invalidate the affected relation's relcache. Mark every
+ * cached graph whose label tables include relid; InvalidOid is a global reset.
+ */
+static void ggctx_security_relcache_callback(Datum arg, Oid relid)
+{
+    GRAPH_global_context *ggctx;
+
+    for (ggctx = global_graph_contexts; ggctx != NULL; ggctx = ggctx->next)
+    {
+        if (!OidIsValid(relid) ||
+            list_member_oid(ggctx->label_table_oids, relid))
+        {
+            ggctx->security_invalidated = true;
+        }
+    }
+}
+
+/*
+ * Syscache invalidation on pg_authid (AUTHOID) and pg_auth_members
+ * (AUTHMEMMEMROLE / AUTHMEMROLEMEM). Role attribute (for example BYPASSRLS) and
+ * membership changes affect authorization but carry no relid we can map to a
+ * label table, so mark all cached contexts stale. Such DDL is rare, so the
+ * broad invalidation is inexpensive.
+ */
+static void ggctx_security_syscache_callback(Datum arg, int cacheid,
+                                             uint32 hashvalue)
+{
+    GRAPH_global_context *ggctx;
+
+    for (ggctx = global_graph_contexts; ggctx != NULL; ggctx = ggctx->next)
+    {
+        ggctx->security_invalidated = true;
+    }
+}
+
+/*
+ * Register the security-invalidation callbacks once per backend. Registered
+ * lazily from manage_GRAPH_global_contexts, before the first cache is built, so
+ * there is never a cache in existence that could miss an earlier invalidation.
+ */
+static void register_ggctx_security_callbacks(void)
+{
+    static bool registered = false;
+
+    if (registered)
+    {
+        return;
+    }
+
+    CacheRegisterRelcacheCallback(ggctx_security_relcache_callback, (Datum) 0);
+    CacheRegisterSyscacheCallback(AUTHOID, ggctx_security_syscache_callback,
+                                  (Datum) 0);
+    CacheRegisterSyscacheCallback(AUTHMEMMEMROLE,
+                                  ggctx_security_syscache_callback, (Datum) 0);
+    CacheRegisterSyscacheCallback(AUTHMEMROLEMEM,
+                                  ggctx_security_syscache_callback, (Datum) 0);
+
+    registered = true;
+}
+
+/*
  * Helper function to manage the GRAPH global contexts. It will create the
  * context for the graph specified, provided it isn't already built and valid.
  * During processing it will free (delete) all invalid GRAPH contexts. It
  * returns the GRAPH global context for the specified graph.
- *
- * NOTE: Function uses a MUTEX for global_graph_contexts
- *
  */
 GRAPH_global_context *manage_GRAPH_global_contexts(char *graph_name,
                                                    Oid graph_oid)
@@ -1031,6 +1575,14 @@ GRAPH_global_context *manage_GRAPH_global_contexts(char *graph_name,
 
     /* we need a higher context, or one that isn't destroyed by SRF exit */
     oldctx = MemoryContextSwitchTo(TopMemoryContext);
+
+    /*
+     * Ensure the ACL/RLS security-invalidation callbacks are registered (once
+     * per backend) before any cache is built, so the version-counter fast path
+     * in is_ggctx_invalid cannot serve stale permissions after GRANT/REVOKE,
+     * policy/RLS DDL, or role authorization changes.
+     */
+    register_ggctx_security_callbacks();
 
     /*
      * We need to see if any GRAPH global contexts already exist and if any do
@@ -1105,20 +1657,23 @@ GRAPH_global_context *manage_GRAPH_global_contexts(char *graph_name,
         curr_ggctx = curr_ggctx->next;
     }
 
-    /* otherwise, we need to create one and possibly attach it */
+    /*
+     * Otherwise we need to build a new context for this graph.
+     *
+     * Build it DETACHED from the shared list, then attach it after a
+     * successful build. The RLS-aware load path runs an SPI query that
+     * evaluates user-defined row-level security policy expressions, and such
+     * an expression can call back into AGE (for example a policy that invokes
+     * a function performing its own VLE / global-graph traversal), re-entering
+     * this function on the same backend. If the half-built context were
+     * already on the shared list, that re-entrant call could find and use it
+     * before it was fully loaded. Building detached avoids that; the
+     * re-entrant call builds its own context and the duplicate is discarded
+     * on attach below. (This code path holds no lock: the context list is
+     * per-backend.)
+     */
     new_ggctx = palloc0(sizeof(GRAPH_global_context));
-
-    if (global_graph_contexts != NULL)
-    {
-        new_ggctx->next = global_graph_contexts;
-    }
-    else
-    {
-        new_ggctx->next = NULL;
-    }
-
-    /* set the global context variable */
-    global_graph_contexts = new_ggctx;
+    new_ggctx->next = NULL;
 
     /* set the graph name and oid */
     new_ggctx->graph_name = pstrdup(graph_name);
@@ -1132,14 +1687,101 @@ GRAPH_global_context *manage_GRAPH_global_contexts(char *graph_name,
     new_ggctx->xmax = GetActiveSnapshot()->xmax;
     new_ggctx->curcid = GetActiveSnapshot()->curcid;
 
+    /*
+     * Record the role and enforcement GUC the cache is loaded under. The
+     * SELECT ACL / RLS enforcement applied during load is role- and
+     * GUC-dependent, so a cache built as one role (or GUC state) must not be
+     * reused for another (see is_ggctx_invalid).
+     */
+    new_ggctx->load_as_role = GetUserId();
+    new_ggctx->loaded_rls_enforced = age_enforce_rls_in_traversal;
+
     /* initialize our vertices list */
     new_ggctx->vertices = NULL;
 
-    /* build the hashtables for this graph */
-    create_GRAPH_global_hashtables(new_ggctx);
-    load_GRAPH_global_hashtables(new_ggctx);
-    freeze_GRAPH_global_hashtables(new_ggctx);
+    /* build the hashtables for this graph (detached from the shared list) */
+    PG_TRY();
+    {
+        create_GRAPH_global_hashtables(new_ggctx);
+        load_GRAPH_global_hashtables(new_ggctx);
+        freeze_GRAPH_global_hashtables(new_ggctx);
+    }
+    PG_CATCH();
+    {
+        /*
+         * The context is not attached to the shared list, so on a failed
+         * load (for example an RLS or ACL error) just free the
+         * partially-built context and re-throw. Its allocations live in
+         * TopMemoryContext (backend lifetime), so without this a role that
+         * repeatedly triggers a load failure - for example retrying a VLE on
+         * a table it cannot read - would leak memory until the backend exits.
+         * free_specific_GRAPH_global_context is safe on a partially-built
+         * context: the vertices list and vertex_hashtable are kept in sync by
+         * insert_vertex_entry, the edge_table lives in its own memory context,
+         * and it only uses pfree / hash_search / hash_destroy /
+         * MemoryContextDelete, none of which re-throw.
+         */
+        (void) free_specific_GRAPH_global_context(new_ggctx);
+        MemoryContextSwitchTo(oldctx);
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
 
+    /*
+     * Attach. While we were building, a re-entrant call from an RLS policy on
+     * this same backend may already have created and attached a context for
+     * this graph. Reuse it only when it is still valid for the current
+     * security context - same role, same enforcement GUC, and not loaded under
+     * RLS - as tested by is_ggctx_invalid(). A re-entrant traversal reached
+     * through a SECURITY DEFINER RLS policy can attach a context loaded as a
+     * different role; returning it here would expose rows the current role may
+     * not be allowed to see. If the existing context is not reusable, detach
+     * and discard it so the list keeps a single, correct context per graph.
+     */
+    prev_ggctx = NULL;
+    curr_ggctx = global_graph_contexts;
+    while (curr_ggctx != NULL)
+    {
+        if (curr_ggctx->graph_oid == graph_oid)
+        {
+            if (!is_ggctx_invalid(curr_ggctx))
+            {
+                (void) free_specific_GRAPH_global_context(new_ggctx);
+                MemoryContextSwitchTo(oldctx);
+                return curr_ggctx;
+            }
+
+            /* detach the incompatible context and discard it */
+            if (prev_ggctx == NULL)
+            {
+                global_graph_contexts = curr_ggctx->next;
+            }
+            else
+            {
+                prev_ggctx->next = curr_ggctx->next;
+            }
+            if (!free_specific_GRAPH_global_context(curr_ggctx))
+            {
+                /*
+                 * The detached context was internally inconsistent (a
+                 * vertex or edge entry went missing). Free our freshly-
+                 * built context first so it does not leak, then surface
+                 * the corruption as the other cleanup paths in this file
+                 * do.
+                 */
+                (void) free_specific_GRAPH_global_context(new_ggctx);
+                ereport(ERROR, (errcode(ERRCODE_DATA_EXCEPTION),
+                                errmsg("missing vertex or edge entry during free")));
+            }
+            break;
+        }
+        prev_ggctx = curr_ggctx;
+        curr_ggctx = curr_ggctx->next;
+    }
+
+    /* prepend our freshly-built context to the shared list */
+    new_ggctx->next = global_graph_contexts;
+    global_graph_contexts = new_ggctx;
 
     /* switch back to the previous memory context */
     MemoryContextSwitchTo(oldctx);
@@ -1372,52 +2014,133 @@ Oid get_vertex_entry_label_table_oid(vertex_entry *ve)
 }
 
 /*
- * Fetch vertex properties on demand from the heap via stored TID.
- *
- * Returns a datumCopy of the properties in the current memory context.
- * The caller does not need to free the result explicitly — it will be
- * freed when the memory context is reset (typically the SRF multi-call
- * context for VLE, which is cleaned up when the SRF completes).
- *
- * If the tuple is no longer visible (e.g., concurrent mutation between
- * cache build and fetch), the version counter should have invalidated
- * the cache. If we get here with a stale TID, it indicates a bug in
- * the invalidation logic.
+ * Outcome of fetch_entry_properties(). A missing row and a row whose properties
+ * are NULL are different failures: the first means the cache is stale, the
+ * second means the label table no longer satisfies the NOT NULL that AGE
+ * creates it with. Reporting them apart keeps a schema problem from being
+ * described as a cache problem.
  */
-Datum get_vertex_entry_properties(vertex_entry *ve)
+typedef enum entry_fetch_status
+{
+    ENTRY_FETCH_OK,
+    ENTRY_FETCH_GONE,
+    ENTRY_FETCH_NULL_PROPS
+} entry_fetch_status;
+
+/*
+ * Read one cached entry's properties out of the heap.
+ *
+ * The stored TID normally resolves under the active snapshot. It does not once
+ * this statement has deleted the tuple: cypher_delete() advances
+ * es_snapshot->curcid past every delete, so a path bound by an earlier MATCH
+ * can no longer see its own endpoints by the time it is projected (issue
+ * #2549). That tuple is still physically present -- our transaction has not
+ * committed, so nothing may prune it -- and the properties it carried when the
+ * path was matched are what the path should report, so it is read anyway.
+ *
+ * The relaxation is deliberately narrow: only a tuple deleted by our own
+ * transaction qualifies, and only while the row still holds the entity that was
+ * cached, so a line pointer recycled by vacuum cannot be mistaken for the
+ * original. Anything else leaves *found false and the caller reports a stale
+ * entry, which is what keeps a genuine cache-invalidation bug visible.
+ *
+ * The value is detoasted here, under the buffer pin, so no caller is left
+ * holding an external pointer into a tuple that is logically gone.
+ */
+static Datum fetch_entry_properties(Oid label_table_oid, ItemPointer tid,
+                                    graphid expected_id, AttrNumber id_attnum,
+                                    AttrNumber props_attnum,
+                                    entry_fetch_status *status)
 {
     Relation rel;
+    TupleDesc tupdesc;
     HeapTupleData tuple;
-    Buffer buffer;
+    Buffer buffer = InvalidBuffer;
     Datum result = (Datum) 0;
+    bool usable;
+    bool isnull;
 
-    rel = table_open(ve->vertex_label_table_oid, AccessShareLock);
-    tuple.t_self = ve->tid;
+    *status = ENTRY_FETCH_GONE;
 
-    if (heap_fetch(rel, GetActiveSnapshot(), &tuple, &buffer, true))
+    rel = table_open(label_table_oid, AccessShareLock);
+    tupdesc = RelationGetDescr(rel);
+    tuple.t_self = *tid;
+
+    /*
+     * keep_buf leaves the tuple readable when the fetch fails on visibility
+     * alone; a line pointer that is gone clears t_data and returns no buffer.
+     */
+    usable = heap_fetch(rel, GetActiveSnapshot(), &tuple, &buffer, true);
+
+    if (!usable && BufferIsValid(buffer))
     {
-        TupleDesc tupdesc = RelationGetDescr(rel);
-        bool isnull;
-        Datum props;
+        TransactionId xmax = HeapTupleHeaderGetUpdateXid(tuple.t_data);
 
-        /* properties is column 2 (1-indexed) */
-        props = heap_getattr(&tuple, 2, tupdesc, &isnull);
-        if (!isnull)
+        if (TransactionIdIsValid(xmax) &&
+            TransactionIdIsCurrentTransactionId(xmax))
         {
-            result = datumCopy(props, false, -1);
-        }
+            Datum id = heap_getattr(&tuple, id_attnum, tupdesc, &isnull);
 
+            usable = !isnull && DATUM_GET_GRAPHID(id) == expected_id;
+        }
+    }
+
+    if (usable)
+    {
+        Datum props = heap_getattr(&tuple, props_attnum, tupdesc, &isnull);
+
+        if (isnull)
+        {
+            *status = ENTRY_FETCH_NULL_PROPS;
+        }
+        else
+        {
+            result = PointerGetDatum(PG_DETOAST_DATUM_COPY(props));
+            *status = ENTRY_FETCH_OK;
+        }
+    }
+
+    if (BufferIsValid(buffer))
+    {
         ReleaseBuffer(buffer);
     }
 
     table_close(rel, AccessShareLock);
 
-    /*
-     * If heap_fetch failed, the tuple is no longer visible. This should
-     * not happen under normal operation because the version counter
-     * invalidates the cache when the graph is mutated.
-     */
-    if (result == (Datum) 0)
+    return result;
+}
+
+/*
+ * Fetch vertex properties on demand from the heap via stored TID.
+ *
+ * Returns a detoasted copy of the properties in the current memory context.
+ * The caller does not need to free the result explicitly — it will be
+ * freed when the memory context is reset (typically the SRF multi-call
+ * context for VLE, which is cleaned up when the SRF completes).
+ *
+ * A tuple this transaction has already deleted is still reported, carrying the
+ * properties it held when the path was matched; see fetch_entry_properties.
+ * Any other unreachable TID means the version counter failed to invalidate the
+ * cache, and is raised as an error.
+ */
+Datum get_vertex_entry_properties(vertex_entry *ve)
+{
+    Datum result;
+    entry_fetch_status status;
+
+    result = fetch_entry_properties(ve->vertex_label_table_oid, &ve->tid,
+                                    ve->vertex_id,
+                                    Anum_ag_label_vertex_table_id,
+                                    Anum_ag_label_vertex_table_properties,
+                                    &status);
+
+    if (status == ENTRY_FETCH_NULL_PROPS)
+    {
+        elog(ERROR, "get_vertex_entry_properties: vertex " INT64_FORMAT
+             " has null properties", ve->vertex_id);
+    }
+
+    if (status != ENTRY_FETCH_OK)
     {
         elog(ERROR, "get_vertex_entry_properties: stale TID - "
              "vertex entry references a tuple that is no longer visible");
@@ -1451,33 +2174,22 @@ Oid get_edge_entry_label_table_oid(edge_entry *ee)
  */
 Datum get_edge_entry_properties(edge_entry *ee)
 {
-    Relation rel;
-    HeapTupleData tuple;
-    Buffer buffer;
-    Datum result = (Datum) 0;
+    Datum result;
+    entry_fetch_status status;
 
-    rel = table_open(ee->edge_label_table_oid, AccessShareLock);
-    tuple.t_self = ee->tid;
+    result = fetch_entry_properties(ee->edge_label_table_oid, &ee->tid,
+                                    get_edge_entry_id(ee),
+                                    Anum_ag_label_edge_table_id,
+                                    Anum_ag_label_edge_table_properties,
+                                    &status);
 
-    if (heap_fetch(rel, GetActiveSnapshot(), &tuple, &buffer, true))
+    if (status == ENTRY_FETCH_NULL_PROPS)
     {
-        TupleDesc tupdesc = RelationGetDescr(rel);
-        bool isnull;
-        Datum props;
-
-        /* properties is column 4 (1-indexed) */
-        props = heap_getattr(&tuple, 4, tupdesc, &isnull);
-        if (!isnull)
-        {
-            result = datumCopy(props, false, -1);
-        }
-
-        ReleaseBuffer(buffer);
+        elog(ERROR, "get_edge_entry_properties: edge " INT64_FORMAT
+             " has null properties", get_edge_entry_id(ee));
     }
 
-    table_close(rel, AccessShareLock);
-
-    if (result == (Datum) 0)
+    if (status != ENTRY_FETCH_OK)
     {
         elog(ERROR, "get_edge_entry_properties: stale TID - "
              "edge entry references a tuple that is no longer visible");
@@ -1933,30 +2645,161 @@ void increment_graph_version(Oid graph_oid)
         }
     }
 
-    /* add new entry */
-    if (state->num_entries < AGE_MAX_GRAPHS)
+    /* take a slot, preferring one left behind by a dropped graph */
     {
-        int idx = state->num_entries;
+        int idx = -1;
+        bool appending;
 
-        state->entries[idx].graph_oid = graph_oid;
-        pg_atomic_init_u64(&state->entries[idx].version, 1);
+        for (i = 0; i < state->num_entries; i++)
+        {
+            if (state->entries[i].graph_oid == InvalidOid)
+            {
+                idx = i;
+                break;
+            }
+        }
+
+        if (idx < 0 && state->num_entries < AGE_MAX_GRAPHS)
+        {
+            idx = state->num_entries;
+        }
+
+        if (idx < 0)
+        {
+            elog(WARNING, "AGE: graph version counter table full (%d graphs)",
+                 AGE_MAX_GRAPHS);
+            LWLockRelease(&state->lock);
+            return;
+        }
+
+        appending = (idx == state->num_entries);
 
         /*
-         * Write barrier ensures the entry fields are fully visible to
-         * other backends before num_entries is incremented. This prevents
-         * readers on weak memory-ordering architectures (e.g., ARM) from
-         * seeing the incremented count before the entry is initialized.
+         * Seed above every version this table has ever issued, freed slots
+         * included, so the sequence never repeats a value. A context cached
+         * against this slot's previous occupant -- or against an earlier graph
+         * that happened to reuse this OID -- then cannot compare equal by
+         * coincidence and be mistaken for current.
+         */
+        {
+            uint64 seed = 0;
+            int j;
+
+            for (j = 0; j < state->num_entries; j++)
+            {
+                uint64 v = pg_atomic_read_u64(&state->entries[j].version);
+
+                if (v > seed)
+                {
+                    seed = v;
+                }
+            }
+
+            if (appending)
+            {
+                pg_atomic_init_u64(&state->entries[idx].version, seed + 1);
+            }
+            else
+            {
+                pg_atomic_write_u64(&state->entries[idx].version, seed + 1);
+            }
+        }
+
+        /*
+         * Publish the version before the oid: readers match on the oid without
+         * the lock and must never find a slot whose version is not yet set.
          */
         pg_write_barrier();
-        state->num_entries++;
-    }
-    else
-    {
-        elog(WARNING, "AGE: graph version counter table full (%d graphs)",
-             AGE_MAX_GRAPHS);
+        state->entries[idx].graph_oid = graph_oid;
+
+        if (appending)
+        {
+            /*
+             * Write barrier ensures the entry fields are fully visible to
+             * other backends before num_entries is incremented. This prevents
+             * readers on weak memory-ordering architectures (e.g., ARM) from
+             * seeing the incremented count before the entry is initialized.
+             */
+            pg_write_barrier();
+            state->num_entries++;
+        }
     }
 
     LWLockRelease(&state->lock);
+}
+
+/*
+ * Release a dropped graph's slot so another graph can use it.
+ *
+ * Without this the table is a tally of every graph ever mutated, and a server
+ * that cycles graphs eventually fills it: further graphs go untracked, every
+ * mutation warns, and their contexts fall back to snapshot comparison, which is
+ * correct but invalidates far more often.
+ *
+ * The version is deliberately left in the freed slot. It is part of the
+ * high-water mark the next occupant seeds above, which is what stops a stale
+ * context from matching a later graph.
+ */
+void release_graph_version(Oid graph_oid)
+{
+    GraphVersionState *state = get_version_state();
+    int i;
+
+    if (state == NULL || !OidIsValid(graph_oid))
+    {
+        return;
+    }
+
+    LWLockAcquire(&state->lock, LW_EXCLUSIVE);
+
+    for (i = 0; i < state->num_entries; i++)
+    {
+        if (state->entries[i].graph_oid == graph_oid)
+        {
+            /*
+             * Clearing the oid is enough to retire the slot: a lock-free
+             * reader matches on it, so it stops finding this graph and falls
+             * back to snapshot comparison until the graph is registered again.
+             */
+            state->entries[i].graph_oid = InvalidOid;
+            break;
+        }
+    }
+
+    LWLockRelease(&state->lock);
+}
+
+/*
+ * Bump the version of every tracked graph.
+ *
+ * For commands that rewrite a heap without naming one: VACUUM FULL or CLUSTER
+ * over a whole database. A graph absent from this table has never been mutated
+ * through the counter, so its contexts are still validated by snapshot
+ * comparison in is_ggctx_invalid() and need no bump.
+ */
+void increment_all_graph_versions(void)
+{
+    GraphVersionState *state = get_version_state();
+    int i;
+
+    if (state == NULL)
+    {
+        return;
+    }
+
+    /*
+     * num_entries only grows, and entries are published with a write barrier
+     * before it is incremented, so reading it without the lock can miss a
+     * brand-new graph but never sees a half-built entry. A graph added after
+     * this read has no cached context to invalidate yet.
+     */
+    for (i = 0; i < state->num_entries; i++)
+    {
+        if (state->entries[i].graph_oid != InvalidOid)
+        {
+            pg_atomic_fetch_add_u64(&state->entries[i].version, 1);
+        }
+    }
 }
 
 /*

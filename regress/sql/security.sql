@@ -1180,6 +1180,145 @@ SELECT * FROM cypher('rls_graph', $$
 $$) AS (a agtype);
 
 -- ============================================================================
+-- PART 11b: DETACH DELETE with a function-based edge policy (issue #2474)
+-- ============================================================================
+-- Regression for a SIGSEGV: an edge-label RLS policy whose USING / WITH CHECK
+-- qual invokes a SQL-language function (e.g. a tenant/owner accessor) crashed
+-- the backend on DETACH DELETE of an edge-connected vertex. The connected-edge
+-- RLS check runs from end_cypher_delete() during executor shutdown, after the
+-- portal's active snapshot has been popped; evaluating the qual then called the
+-- function via fmgr_sql()/postquel_start(), which dereferences
+-- GetActiveSnapshot() unconditionally -> NULL deref. A constant-only edge
+-- policy (PART 11 above) never enters that path, so it did not crash. DETACH
+-- DELETE must now complete and delete the vertex and its edge under the policy.
+
+-- A STABLE SQL-language accessor (LANGUAGE sql is what exercises the
+-- snapshot-dependent postquel executor path; a C/builtin function would not).
+CREATE FUNCTION rls_detach_owner() RETURNS text
+    LANGUAGE sql STABLE AS $$ SELECT current_user::text $$;
+
+ALTER TABLE rls_graph."Person" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY detach_fn_person_all ON rls_graph."Person"
+    FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE rls_graph."KNOWS" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY detach_fn_knows_owner ON rls_graph."KNOWS"
+    FOR ALL
+    USING (properties->>'"owner"' = rls_detach_owner())
+    WITH CHECK (properties->>'"owner"' = rls_detach_owner());
+
+-- Seed (as superuser, bypassing the WITH CHECK) an edge owned by rls_user1.
+SELECT * FROM cypher('rls_graph', $$
+    CREATE (:Person {name: 'DetachFn1', owner: 'rls_user1', department: 'DetachFn'})
+$$) AS (a agtype);
+
+SELECT * FROM cypher('rls_graph', $$
+    CREATE (:Person {name: 'DetachFn2', owner: 'rls_user1', department: 'DetachFn'})
+$$) AS (a agtype);
+
+SELECT * FROM cypher('rls_graph', $$
+    MATCH (a:Person {name: 'DetachFn1'}), (b:Person {name: 'DetachFn2'})
+    CREATE (a)-[:KNOWS {since: 2021, owner: 'rls_user1'}]->(b)
+$$) AS (a agtype);
+
+SET ROLE rls_user1;
+
+-- Must NOT crash: deletes DetachFn1 and its connected edge under a
+-- function-based edge policy the role satisfies.
+SELECT * FROM cypher('rls_graph', $$
+    MATCH (p:Person {name: 'DetachFn1'}) DETACH DELETE p
+$$) AS (a agtype);
+
+RESET ROLE;
+
+-- DetachFn1 is gone.
+SELECT * FROM cypher('rls_graph', $$
+    MATCH (p:Person {name: 'DetachFn1'}) RETURN p.name
+$$) AS (name agtype);
+
+-- DetachFn2 (the other endpoint) survives.
+SELECT * FROM cypher('rls_graph', $$
+    MATCH (p:Person {name: 'DetachFn2'}) RETURN p.name
+$$) AS (name agtype);
+
+-- The connecting edge is gone (no edge now points into DetachFn2).
+SELECT * FROM cypher('rls_graph', $$
+    MATCH ()-[k:KNOWS]->(b:Person {name: 'DetachFn2'}) RETURN k.since
+$$) AS (since agtype);
+
+-- Exercise function-based edge RLS through the default endpoint indexes.
+SELECT * FROM cypher('rls_graph', $$
+    CREATE (:Person {name: 'DetachFnIndexHub', owner: 'rls_user1', department: 'DetachFn'})
+$$) AS (a agtype);
+
+SELECT * FROM cypher('rls_graph', $$
+    MATCH (hub:Person {name: 'DetachFnIndexHub'})
+    UNWIND range(1, 16) AS ident
+    CREATE (hub)-[:KNOWS {owner: 'rls_user1'}]->
+           (:Person {owner: 'rls_user1', department: 'DetachFn', leaf: ident})
+$$) AS (a agtype);
+
+SET ROLE rls_user1;
+
+SELECT * FROM cypher('rls_graph', $$
+    MATCH (p:Person {name: 'DetachFnIndexHub'}) DETACH DELETE p
+$$) AS (a agtype);
+
+RESET ROLE;
+
+SELECT * FROM cypher('rls_graph', $$
+    MATCH ()-[k:KNOWS]->() WHERE k.owner = 'rls_user1' RETURN count(k)
+$$) AS (count agtype);
+
+-- Drop the endpoint indexes to exercise the connected-edge sequential scan.
+DO $$
+DECLARE
+    index_to_drop regclass;
+BEGIN
+    FOR index_to_drop IN
+        SELECT indexrelid
+        FROM pg_index
+        WHERE indrelid = 'rls_graph."KNOWS"'::regclass
+          AND indnatts = 1
+          AND indkey[0] IN (2, 3)
+    LOOP
+        EXECUTE format('DROP INDEX %s', index_to_drop);
+    END LOOP;
+END
+$$;
+
+SELECT * FROM cypher('rls_graph', $$
+    CREATE (:Person {name: 'DetachFnSeqHub', owner: 'rls_user1', department: 'DetachFn'})
+$$) AS (a agtype);
+
+SELECT * FROM cypher('rls_graph', $$
+    MATCH (hub:Person {name: 'DetachFnSeqHub'})
+    UNWIND range(1, 16) AS ident
+    CREATE (hub)-[:KNOWS {owner: 'rls_user1'}]->
+           (:Person {owner: 'rls_user1', department: 'DetachFn', seq_leaf: ident})
+$$) AS (a agtype);
+
+SET ROLE rls_user1;
+
+SELECT * FROM cypher('rls_graph', $$
+    MATCH (p:Person {name: 'DetachFnSeqHub'}) DETACH DELETE p
+$$) AS (a agtype);
+
+RESET ROLE;
+
+SELECT * FROM cypher('rls_graph', $$
+    MATCH ()-[k:KNOWS]->() WHERE k.owner = 'rls_user1' RETURN count(k)
+$$) AS (count agtype);
+
+-- cleanup
+DROP POLICY detach_fn_knows_owner ON rls_graph."KNOWS";
+DROP POLICY detach_fn_person_all ON rls_graph."Person";
+DROP FUNCTION rls_detach_owner();
+SELECT * FROM cypher('rls_graph', $$
+    MATCH (p:Person) WHERE p.department = 'DetachFn' DETACH DELETE p
+$$) AS (a agtype);
+
+-- ============================================================================
 -- PART 12: Multiple Labels in Single Query
 -- ============================================================================
 
@@ -1449,3 +1588,41 @@ DROP ROLE rls_admin;
 
 -- Drop test graph
 SELECT drop_graph('rls_graph', true);
+
+-- ============================================================================
+-- NON-SUPERUSER drop_label REGRESSION TEST
+--
+-- Regression test for object_ownercheck() argument order in
+-- range_var_callback_for_remove_relation(). A non-superuser that OWNS a
+-- graph/label previously failed drop_label() with "unrecognized class ID"
+-- because rel_oid was passed as the classid instead of RelationRelationId.
+-- ============================================================================
+
+DROP ROLE IF EXISTS age_nonsuper;
+CREATE ROLE age_nonsuper LOGIN NOSUPERUSER;
+
+-- create_graph() creates a new schema in the current database, so the role
+-- needs CREATE on the database; managing labels needs USAGE + CREATE on
+-- ag_catalog. Grant CREATE on whatever database the tests run in.
+DO $$
+BEGIN
+    EXECUTE format('GRANT CREATE ON DATABASE %I TO age_nonsuper',
+                   current_database());
+END
+$$;
+GRANT USAGE  ON SCHEMA ag_catalog TO age_nonsuper;
+GRANT CREATE ON SCHEMA ag_catalog TO age_nonsuper;
+
+-- Reproduce as the non-superuser role: it creates (and therefore OWNS) the
+-- graph and the label, then drops the label. Before the fix this raised
+-- "unrecognized class ID"; after the fix the label is dropped successfully.
+SET ROLE age_nonsuper;
+SELECT create_graph('repro_graph');
+SELECT create_vlabel('repro_graph', 'repro_label');
+SELECT drop_label('repro_graph', 'repro_label');
+SELECT drop_graph('repro_graph', true);
+RESET ROLE;
+
+-- Cleanup
+DROP OWNED BY age_nonsuper CASCADE;
+DROP ROLE age_nonsuper;

@@ -509,7 +509,8 @@ static void create_index_on_column(char *schema_name,
     index_col->expr = NULL;
     index_col->indexcolname = NULL;
     index_col->collation = NIL;
-    index_col->opclass = list_make1(makeString("graphid_ops"));
+    index_col->opclass = list_make2(makeString("ag_catalog"),
+                                    makeString("graphid_ops"));
     index_col->opclassopts = NIL;
     index_col->ordering = SORTBY_DEFAULT;
     index_col->nulls_ordering = SORTBY_NULLS_DEFAULT;
@@ -1036,7 +1037,7 @@ static void range_var_callback_for_remove_relation(const RangeVar *rel,
 
     /* relkind == expected_relkind */
 
-    if (!object_ownercheck(rel_oid, get_rel_namespace(rel_oid), GetUserId()))
+    if (!object_ownercheck(RelationRelationId, rel_oid, GetUserId()))
     {
         aclcheck_error(ACLCHECK_NOT_OWNER,
                        get_relkind_objtype(get_rel_relkind(rel_oid)),
