@@ -571,7 +571,17 @@ LOG:  all server processes terminated; reinitializing
 
 **后续取证**：保留日志并定位 Windows 事件、故障模块、进程转储；对比 PATH、DLL 解析路径、启动方式和资源状态。本轮未取得可归因的 Windows 事件证据，未修改 WER 或注册表。不要在未定位时改业务 `shared_preload_libraries`、关闭 autovacuum，或反复 CREATE/DROP PL/Python 作为规避。扩展压力实验应继续使用独立实例。详细参数与结果见 `d:\odoochain\odoochain\doc\dev\postgres-extensions.md` §6。
 
-**模块清单证据（2026-10-07 10:30）**：在卡死的 postmaster 现场采集已加载模块，共 47 个，其中匹配 `python` / `plpython` / `age` / `vector` 的**均为 0**，非系统模块只有 `postgres.exe` 与 MinGW 运行时。该进程从未加载 Python 运行时。结合 06:43 那次失败的是普通 client backend、而 autovacuum 本身不执行用户 PL/Python 函数，**当前证据更支持与扩展无关的进程初始化故障，不宜继续把 `0xC0000142` 归因于 PL/Python**。已排除的假设（二进制路径不一致、数据目录争用、系统级进程创建失效）见该文档 §6.1.2，不必重复验证。
+**结论已改（2026-10-07 16:55）：崩溃与扩展无关，属环境级故障。**
+
+决定性对照：用**同一** `2026-06-11` 二进制、**同一端口** 5433 新建一个 `initdb` 空集群（UTF8/C locale，不装任何扩展、无业务数据），运行约 25 分钟后同样以 `autovacuum worker ... exception 0xC0000142` 崩溃并 `reinitializing`。
+
+因此 AGE、pgvector、Jev、PL/Python **均不是诱因**，数据目录也不是。这同时解释了预加载/不预加载两组对照为何都通过——当时系统尚未进入故障状态。
+
+三次独立采集（PID 44000 / 43516 / 37496）模块数均为 47，`python` / `plpython` / `age` / `vector` 匹配均为 0；非系统模块只有 `postgres.exe` 与 MinGW 运行时。
+
+**重启只能短暂恢复**：15:23 就绪→15:52 崩；重启→16:24 在启动后约 1 秒即崩（普通 client backend）；17:26 就绪→17:56 又不可连接。失败类型不局限于 autovacuum，也不需要长时间运行才触发。
+
+**不要再往扩展方向排查。** 下一步应以转储定位故障 DLL，并排查桌面堆/会话配额、句柄与内存压力、安全软件注入、PATH 中同名 DLL 优先解析等环境级因素；也可验证以服务方式运行或改用 MSVC 版 PostgreSQL 是否规避。转储归档见 `D:/odoochain/pg-crash-evidence-20261007-*.zip`，详细时间线见 `d:\odoochain\odoochain\doc\dev\postgres-extensions.md` §6。建议单独立项，不要在 AGE 兼容性语境下继续投入。
 
 ## 十、文件清单
 
