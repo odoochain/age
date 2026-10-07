@@ -552,22 +552,26 @@ LOG:  terminating any other active server processes
 LOG:  all server processes terminated; reinitializing
 ```
 
-`0xC0000142` 是 Windows 的 `STATUS_DLL_INIT_FAILED`。本次发生在**刚安装 MinGW Python 之后、加载 `plpython3u` 的会话期间**，因此怀疑与 autovacuum 子进程加载 Python 运行时有关，但**未确认因果关系**。
+`0xC0000142` 是 Windows 的 `STATUS_DLL_INIT_FAILED`，表示进程初始化阶段 DLL 失败，**不能仅凭此码确定故障 DLL 或归因于 PL/Python**。扩展文件位于共享目录，不意味着 autovacuum 会自动加载该扩展。
 
-**恢复**（实测有效，数据未丢失）：
+**恢复边界**：历史上在确认实例归属后 `stop -m fast` 再启动，曾恢复连接并触发 WAL 恢复；但未核验业务数据完整性，不能声称已证明无数据丢失。操作须安排维护窗口，先核对数据目录、PID、日志占用与其他连接，不要重复启动或强杀所有 `postgres.exe`。
 
-```bash
-pg_ctl -D D:/mydata/pgdata stop -m fast
-pg_ctl -D D:/mydata/pgdata -o '-p 5433' -l D:/mydata/pgdata/logfile start
-```
+**完整日志复查（2026-10-07）**：当天至少五次 `0xC0000142`：06:37、06:43、07:25、07:57、09:51。其中 06:43 为 `client backend`，其余为 autovacuum worker。因此问题不局限于 autovacuum，也不只出现两次。
 
-实例会自动完成 WAL 恢复并重新接受连接。
+**预加载对照结果（2026-10-07）**：另建 UTF8/C locale 的隔离测试集群，使用同一 MinGW PostgreSQL 18.4 安装、独立端口 55433，不改动或重启原 5433 实例：
 
-**小坑**：崩溃后直接 `start` 可能报 `could not open log file ... Permission denied`（日志文件被占用）。先 `stop -m fast` 再启动即可。
+| 条件 | Jev 原始回归 | 40 次新会话 PL/Python 调用 | 实际 autovacuum | 崩溃 |
+|---|---|---|---|---|
+| 不预加载，09:59:51–10:08:13 CST | 4/4 通过 | 通过，4 路并发 | 发生，死元组归零 | 未复现 |
+| `shared_preload_libraries=plpython3`，10:09:19–10:13:39 CST | 4/4 通过 | 通过，4 路并发 | 再次发生，死元组归零 | 未复现 |
 
-**状态更新（2026-10-07）**：**已复现第二次**（在跑 `make installcheck` 期间）。两次时间窗都与 `plpython3u` 相关，但因果未确认。
+**两组都通过，不能据此认定预加载是修复。** 观察窗口短且不等长，尚不能排除原集群配置、进程启动环境、资源限制或长时间运行因素。测试只使用本地 mock API，无真实外发数据；临时实例已正常停止，预加载仅为启动参数。
 
-在根因定位前，建议**不要让依赖 `plpython3u` 的扩展（如 Jev）与业务关键库共用实例**，改用独立实例隔离。排查方向：未通过 `shared_preload_libraries` 预加载 Python 时，autovacuum 等后台进程首次加载 `plpython3.dll` 的 DLL 初始化路径。
+[PostgreSQL 18 官方文档](https://www.postgresql.org/docs/18/runtime-config-client.html#GUC-SHARED-PRELOAD-LIBRARIES)说明，Windows 的每个新服务端进程仍会重新加载预加载库。不要把预加载当成“一次加载后不再初始化 DLL”的办法。
+
+**后续取证**：保留日志并定位 Windows 事件、故障模块、进程转储；对比 PATH、DLL 解析路径、启动方式和资源状态。本轮未取得可归因的 Windows 事件证据，未修改 WER 或注册表。不要在未定位时改业务 `shared_preload_libraries`、关闭 autovacuum，或反复 CREATE/DROP PL/Python 作为规避。扩展压力实验应继续使用独立实例。详细参数与结果见 `d:\odoochain\odoochain\doc\dev\postgres-extensions.md` §6。
+
+**模块清单证据（2026-10-07 10:30）**：在卡死的 postmaster 现场采集已加载模块，共 47 个，其中匹配 `python` / `plpython` / `age` / `vector` 的**均为 0**，非系统模块只有 `postgres.exe` 与 MinGW 运行时。该进程从未加载 Python 运行时。结合 06:43 那次失败的是普通 client backend、而 autovacuum 本身不执行用户 PL/Python 函数，**当前证据更支持与扩展无关的进程初始化故障，不宜继续把 `0xC0000142` 归因于 PL/Python**。已排除的假设（二进制路径不一致、数据目录争用、系统级进程创建失效）见该文档 §6.1.2，不必重复验证。
 
 ## 十、文件清单
 
