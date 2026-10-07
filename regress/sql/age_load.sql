@@ -17,11 +17,12 @@
  * under the License.
  */
 
-\! rm -rf /tmp/age/age_load
-\! mkdir -p /tmp/age
-\! cp -r regress/age_load/data /tmp/age/age_load
+\! perl regress/age_load/prepare.pl
 
 LOAD 'age';
+\set ECHO none
+\i regress/results/age_load_setup.sql
+\set ECHO all
 
 SET search_path TO ag_catalog;
 
@@ -180,14 +181,26 @@ SELECT load_labels_from_file('agload_conversion', 'Person1', 'age_load/conversio
 SELECT load_edges_from_file('agload_conversion', 'Edges1', 'age_load/conversion_edges.txt', true);
 
 -- check wrong extension
-\! touch /tmp/age/age_load/conversion_vertices.txt
-\! touch /tmp/age/age_load/conversion_edges.txt
+\! perl regress/age_load/prepare.pl --touch
 SELECT load_labels_from_file('agload_conversion', 'Person1', 'age_load/conversion_vertices.txt', true, true);
 SELECT load_edges_from_file('agload_conversion', 'Edges1', 'age_load/conversion_edges.txt', true);
 
 -- check outside sandbox directory
 SELECT load_labels_from_file('agload_conversion', 'Person1', '../../etc/passwd', true, true);
 SELECT load_edges_from_file('agload_conversion', 'Edges1', '../../etc/passwd', true);
+SELECT load_labels_from_file('agload_conversion', 'Person1', '/absolute.csv', true, true);
+SELECT load_edges_from_file('agload_conversion', 'Edges1', 'C:relative.csv', true);
+SELECT load_labels_from_file('agload_conversion', 'Person1', 'age_load/countries.csv:stream.csv', true, true);
+SELECT load_labels_from_file('agload_conversion', 'Person1', repeat('x', 4096) || '.csv', true, true);
+
+-- Only administrators may select the CSV sandbox.
+SET age.csv_directory = 'relative/path';
+CREATE ROLE age_csv_reader;
+GRANT pg_read_server_files TO age_csv_reader;
+SET ROLE age_csv_reader;
+SET age.csv_directory = '/';
+RESET ROLE;
+DROP ROLE age_csv_reader;
 
 --
 -- Cleanup

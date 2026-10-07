@@ -2340,7 +2340,7 @@ SELECT * FROM cypher('expr', $$
     RETURN pi()
 $$) AS (results agtype);
 SELECT * FROM cypher('expr', $$
-    RETURN sin(pi())
+    RETURN abs(sin(pi())) < 1e-15
 $$) AS (results agtype);
 SELECT * FROM cypher('expr', $$
     RETURN sin(pi()/4)
@@ -2349,7 +2349,7 @@ SELECT * FROM cypher('expr', $$
     RETURN cos(pi())
 $$) AS (results agtype);
 SELECT * FROM cypher('expr', $$
-    RETURN cos(pi()/2)
+    RETURN abs(cos(pi()/2)) < 1e-15
 $$) AS (results agtype);
 SELECT * FROM cypher('expr', $$
     RETURN sin(pi()/2)

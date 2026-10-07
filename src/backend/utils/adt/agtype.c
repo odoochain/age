@@ -6202,7 +6202,7 @@ static Datum get_vertex(const char *graph, const char *vertex_label,
         table_close(graph_vertex_label, ShareLock);
         ereport(ERROR,
                 (errcode(ERRCODE_UNDEFINED_TABLE),
-                 errmsg("graphid %lu does not exist", graphid)));
+                 errmsg("graphid " INT64_FORMAT " does not exist", graphid)));
     }
 
     /* Check RLS policies - error if filtered out */
@@ -6220,7 +6220,7 @@ static Datum get_vertex(const char *graph, const char *vertex_label,
         table_close(graph_vertex_label, ShareLock);
         ereport(ERROR,
                 (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-                 errmsg("access to vertex %lu denied by row-level security policy on \"%s\"",
+                 errmsg("access to vertex " INT64_FORMAT " denied by row-level security policy on \"%s\"",
                         graphid, vertex_label)));
     }
 

@@ -24,6 +24,17 @@
 
 bool age_enable_containment = true;
 bool age_enforce_rls_in_traversal = true;
+char *age_csv_directory = NULL;
+
+static bool check_csv_directory(char **newval, void **extra, GucSource source)
+{
+    if (*newval == NULL || !is_absolute_path(*newval))
+    {
+        GUC_check_errdetail("CSV directory must be an absolute path.");
+        return false;
+    }
+    return true;
+}
 
 /*
  * Defines AGE's custom configuration parameters.
@@ -53,5 +64,15 @@ void define_config_params(void)
                              NULL,
                              NULL,
                              NULL);
+    DefineCustomStringVariable("age.csv_directory",
+                               "Root directory for server-side CSV imports.",
+                               NULL,
+                               &age_csv_directory,
+                               "/tmp/age/",
+                               PGC_SUSET,
+                               0,
+                               check_csv_directory,
+                               NULL,
+                               NULL);
     EmitWarningsOnPlaceholders("age");
 }

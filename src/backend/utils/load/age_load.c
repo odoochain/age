@@ -30,6 +30,7 @@
 #include "nodes/parsenodes.h"
 #include "parser/parse_relation.h"
 #include "utils/acl.h"
+#include "utils/ag_guc.h"
 #include "utils/json.h"
 #include "utils/rel.h"
 #include "utils/rls.h"
@@ -47,7 +48,6 @@ static void check_file_read_permission(void);
 static void check_table_permissions(Oid relid);
 static void check_rls_for_load(Oid relid);
 
-#define AGE_BASE_CSV_DIRECTORY "/tmp/age/"
 #define AGE_CSV_FILE_EXTENSION ".csv"
 
 /*
@@ -93,54 +93,92 @@ char *trim_whitespace(const char *str)
     return pnstrdup(start, len);
 }
 
+/* Resolve links before checking the sandbox boundary, including NTFS junctions. */
+static char *resolve_csv_path(const char *path)
+{
+#ifdef _WIN32
+    HANDLE handle;
+    DWORD length;
+    char buffer[MAXPGPATH];
+    char *resolved;
+
+    handle = CreateFileA(path, 0,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                         NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (handle == INVALID_HANDLE_VALUE)
+        return NULL;
+
+    length = GetFinalPathNameByHandleA(handle, buffer, sizeof(buffer),
+                                     FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    CloseHandle(handle);
+    if (length == 0 || length >= sizeof(buffer))
+        return NULL;
+
+    if (strncmp(buffer, "\\\\?\\UNC\\", 8) == 0)
+    {
+        resolved = malloc(strlen(buffer + 8) + 3);
+        if (resolved != NULL)
+            sprintf(resolved, "//%s", buffer + 8);
+    }
+    else
+        resolved = strdup(strncmp(buffer, "\\\\?\\", 4) == 0 ? buffer + 4 : buffer);
+#else
+    char *resolved = realpath(path, NULL);
+#endif
+
+    if (resolved != NULL)
+        canonicalize_path(resolved);
+    return resolved;
+}
+
 static char *build_safe_filename(char *name)
 {
-    int length;
-    char path[PATH_MAX];
+    size_t length;
+    char path[MAXPGPATH];
+    char *base;
     char *resolved;
 
     if (name == NULL)
-    {
         ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                         errmsg("file name cannot be NULL")));
 
-    }
-
-    length = strlen(name);
-
-    if (length == 0)
-    {
+    if (name[0] == '\0')
         ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                         errmsg("file name cannot be zero length")));
 
-    }
-
-    snprintf(path, sizeof(path), "%s%s", AGE_BASE_CSV_DIRECTORY, name);
-
-#ifdef _WIN32
-    resolved = _fullpath(NULL, path, MAXPGPATH);
-#else
-    resolved = realpath(path, NULL);
-#endif
-
-    if (resolved == NULL)
-    {
+    if (!path_is_relative_and_below_cwd(name) || strchr(name, ':') != NULL)
         ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                        errmsg("File or path does not exist [%s]", path)));
-    }
+                        errmsg("You can only load files located in the CSV directory.")));
 
-    if (strncmp(resolved, AGE_BASE_CSV_DIRECTORY,
-                strlen(AGE_BASE_CSV_DIRECTORY)) != 0)
-    {
+    if (snprintf(path, sizeof(path), "%s/%s", age_csv_directory, name) >= sizeof(path))
         ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                        errmsg("You can only load files located in [%s].",
-                               AGE_BASE_CSV_DIRECTORY)));
+                        errmsg("CSV file path is too long")));
+
+    base = resolve_csv_path(age_csv_directory);
+    resolved = resolve_csv_path(path);
+    if (base == NULL || resolved == NULL)
+    {
+        free(base);
+        free(resolved);
+        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                        errmsg("File or path does not exist [%s]", name)));
     }
 
-    length = strlen(resolved) - 4;
-    if (strncmp(resolved+length, AGE_CSV_FILE_EXTENSION,
-                strlen(AGE_CSV_FILE_EXTENSION)) != 0)
+    if (!path_is_prefix_of_path(base, resolved))
     {
+        free(base);
+        free(resolved);
+        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                        errmsg("You can only load files located in the CSV directory.")));
+    }
+    free(base);
+
+    length = strlen(resolved);
+    if (length < strlen(AGE_CSV_FILE_EXTENSION) ||
+        strcmp(resolved + length - strlen(AGE_CSV_FILE_EXTENSION),
+               AGE_CSV_FILE_EXTENSION) != 0)
+    {
+        free(resolved);
         ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                         errmsg("You can only load files with extension [%s].",
                                AGE_CSV_FILE_EXTENSION)));
@@ -555,10 +593,10 @@ void insert_batch(batch_insert_state *batch_state)
                 bool isnull;
 
                 id = slot_getattr(batch_state->slots[i], 1, &isnull);
-                ereport(ERROR, (errmsg("Cannot insert duplicate vertex id: %ld",
+                ereport(ERROR, (errmsg("Cannot insert duplicate vertex id: " INT64_FORMAT,
                                         DATUM_GET_GRAPHID(id)),
-                                errhint("Entry id %ld is already used",
-                                        get_graphid_entry_id(id))));
+                                errhint("Entry id " INT64_FORMAT " is already used",
+                                        get_graphid_entry_id(DATUM_GET_GRAPHID(id)))));
             }
         }
     }

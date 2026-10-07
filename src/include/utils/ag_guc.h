@@ -48,6 +48,9 @@ extern bool age_enable_containment;
  */
 extern bool age_enforce_rls_in_traversal;
 
+/* Superuser-controlled root for server-side CSV imports. */
+extern char *age_csv_directory;
+
 void define_config_params(void);
 
 #endif

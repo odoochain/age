@@ -246,6 +246,12 @@ endlocal
 
 ## 六、运行测试
 
+完整回归应使用专用 MinGW PostgreSQL 安装目录和数据目录，以 `initdb --encoding=UTF8 --locale=C` 初始化，并选用空闲端口。不要对业务实例的共享扩展目录执行 `make install`；单独创建测试数据库并不能隔离 DLL。`installcheck-existing` 会删除并重建测试数据库，因此手工预建库的编码/排序规则不会保留。该目标强制 UTF8，但实例仍须采用 C 排序规则。
+
+CSV 导入根目录由超管参数 `age.csv_directory` 指定，默认仍为 `/tmp/age/`。Windows 应指定本机绝对路径（例如 `D:/age-import`）；导入参数为根目录下的相对文件名。原有 `pg_read_server_files`、表权限和 RLS 检查仍然生效，路径遍历、目录外链接和 NTFS 数据流路径被拒绝。根目录及其父目录必须由可信管理员管理，不能允许不可信用户并发替换文件或链接。
+
+`age_load` 回归使用 `regress/age_load/prepare.pl` 在 `regress/results/csv` 准备专用夹具，不再依赖 `/tmp` 或 `cmd` 下的 `mkdir -p`。请在 PATH 中提供完整 Perl（包括核心模块）和 GNU diff；MSYS2 的 Perl 会通过 `cygpath` 转换为原生 Windows 路径。
+
 ### 6.1 启动 PostgreSQL（运行 AGE 的目标实例）
 
 > MSYS2 在本流程中负责 AGE 编译，并提供 ABI 匹配的 MinGW PostgreSQL 运行环境；编译产物不能直接安装到 Scoop 提供的 MSVC PostgreSQL。下文以独立的 MSYS2/MinGW PostgreSQL 实例（5433）为准；如果只保留 Scoop 的 MSVC PostgreSQL，应改用 ABI 匹配的 AGE 构建方式或使用 Docker/Linux。

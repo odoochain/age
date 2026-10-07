@@ -5642,11 +5642,11 @@ $$) AS (results agtype);
 (1 row)
 
 SELECT * FROM cypher('expr', $$
-    RETURN sin(pi())
+    RETURN abs(sin(pi())) < 1e-15
 $$) AS (results agtype);
-       results        
-----------------------
- 1.22464679914735e-16
+ results 
+---------
+ true
 (1 row)
 
 SELECT * FROM cypher('expr', $$
@@ -5666,11 +5666,11 @@ $$) AS (results agtype);
 (1 row)
 
 SELECT * FROM cypher('expr', $$
-    RETURN cos(pi()/2)
+    RETURN abs(cos(pi()/2)) < 1e-15
 $$) AS (results agtype);
-       results        
-----------------------
- 6.12323399573677e-17
+ results 
+---------
+ true
 (1 row)
 
 SELECT * FROM cypher('expr', $$

@@ -423,9 +423,9 @@ endif
 # extension files into the local $(SHAREDIR), which an existing or remote
 # server would not see.  Validate the upgrade path with "make installcheck".
 #
-# Locale note: locale-sensitive comparisons follow the existing server's own
-# collation (fixed at its initdb time); the temp-instance locale flags do not
-# apply to an already-running server.
+# The server must use C collation (initdb --locale=C). pg_regress recreates
+# the test database, so pre-creating it with a different locale has no effect.
+# Force UTF8 below rather than inheriting the server's default encoding.
 PGDATABASE ?= contrib_regression
 REGRESS_EXISTING = $(filter-out age_upgrade,$(REGRESS))
 
@@ -435,6 +435,7 @@ installcheck-existing:
 	  --inputdir=$(ag_regress_dir) \
 	  --outputdir=$(ag_regress_dir) \
 	  --load-extension=age \
+	  --encoding=UTF-8 \
 	  $(if $(PGHOST),--host=$(PGHOST)) \
 	  $(if $(PGPORT),--port=$(PGPORT)) \
 	  $(if $(PGUSER),--user=$(PGUSER)) \
