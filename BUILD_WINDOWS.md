@@ -2,10 +2,13 @@
 
 > 环境：Windows 10/11, PostgreSQL 18.4, MSYS2 MinGW64
 > 版本：AGE 1.8.0（2026-08-26 从 1.7.0 合并 `apache/PG18` 升级并实测编译通过）
+> 2026-10-07 补充：新增 §八之二（与其他扩展共存）、坑 8（`search_path`）、坑 9（`plpython3u` 运行时）、坑 10（实例崩溃）
 
 ## 一、背景
 
 Apache AGE 是 PostgreSQL 的图数据库扩展，原生仅支持 Linux/Unix。本文记录了在 Windows 上成功编译运行的完整过程，包括遇到的所有坑和解决方案。
+
+配套的扩展栈整体说明（本机实例为何用 MinGW PostgreSQL、与 pgvector/Jev 的版本关系、对 CI 的影响）见 `d:\odoochain\odoochain\doc\dev\postgres-extensions.md`。
 
 ## 二、为什么不能用 MSVC
 
@@ -349,6 +352,31 @@ $$) AS (name agtype, created agtype, matched agtype);
 | 内联多 CREATE 关系 | 变量作用域问题，需用 MATCH + CREATE 分开写 |
 | 扩展目标 PG | MSYS2/MinGW 用于编译并运行 AGE；编译出的 `age.dll`/`age--1.7.0.sql` 只能安装到 ABI 匹配的 MSYS2/MinGW PostgreSQL（本流程为 5433），不能直接安装到 Scoop 的 MSVC PostgreSQL |
 | DLL 搜索顺序 | 需手动复制 zlib1.dll 到 binutils 目录 |
+| `search_path` 依赖 | AGE 的对象（含 `graphid_ops`）装在 `ag_catalog`，会话 `search_path` 不含它时 `create_graph` 会失败。详见坑 8 |
+
+## 八之二、与其他扩展共存（2026-10-07 实测）
+
+在同一个 PostgreSQL 18.4（MSYS2/MinGW，5433）实例、同一个数据库内，AGE 可与 pgvector、`plpython3u`、Jev 同时加载，各自功能独立可用：
+
+```
+ extname   | extversion
+-----------+------------
+ age       | 1.8.0
+ jev       | 0.2.1
+ plpython3u| 1.0
+ vector    | 0.8.6
+```
+
+| 组件 | 实测结果 |
+|---|---|
+| AGE 1.8.0 | 建图、`cypher()` 增改查、`drop_graph()` 均通过 |
+| pgvector 0.8.6 | `vector(3)` 类型与 `<->` 距离运算符通过 |
+| Jev 0.2.1 | `CREATE EXTENSION jev CASCADE` 成功，`jev_version()` 返回 `0.2.1`，10 个函数注册，GUC 可设置 |
+| plpython3u | 需先装 MinGW Python，见坑 9 |
+
+**注意**：`plpython3u` 是 untrusted 语言，Jev 依赖它。若不想让 untrusted 语言与图数据库共处同一实例，应另起一个实例承载 Jev（例如 5434），代价是跨实例无法直接 JOIN。
+
+相关上下文见 `d:\odoochain\odoochain\doc\dev\postgres-extensions.md`。
 
 ## 九、踩坑记录
 
@@ -439,7 +467,105 @@ REM test_cypher.bat —— 正确做法
 
 `.sql` 文件里照常写 `SET search_path = ag_catalog, "$user", public;` 即可，不需要任何转义。
 
-> 补充：`SET search_path` 只是为了省略 `ag_catalog.` 前缀，并非必需。单条命令可直接写全限定名，如 `SELECT ag_catalog.create_graph('g');`。
+> 补充：`SET search_path` 的另一个作用是省略 `ag_catalog.` 前缀。但**对于 `create_graph` 这类函数，设置 `search_path` 是必需的，不能只靠写全限定名**——详见坑 8。
+
+### 坑 8：`create_graph` 报 `operator class "graphid_ops" does not exist`（2026-10-07 新增）
+
+**现象**：
+
+```
+ERROR:  operator class "graphid_ops" does not exist for access method "btree"
+STATEMENT:  SELECT ag_catalog.create_graph('my_graph');
+```
+
+**极易误判**：这个报错看起来像「AGE 没装好」或「PG 18 不兼容」，实际两者都不是。
+
+**原因**：`graphid_ops` **确实存在**，但 AGE 把它装在 `ag_catalog` schema 下：
+
+```sql
+SELECT n.nspname, o.opcname, a.amname
+FROM pg_opclass o
+JOIN pg_am a ON a.oid = o.opcmethod
+JOIN pg_namespace n ON n.oid = o.opcnamespace
+WHERE o.opcname LIKE '%graphid%';
+```
+
+```
+  nspname   |     opcname      | amname
+------------+------------------+--------
+ ag_catalog | graphid_ops      | btree
+ ag_catalog | graphid_ops_hash | hash
+```
+
+而会话 `search_path` 默认是 `"$user", public`，**不包含 `ag_catalog`**。AGE 内部建表时按非限定名查找操作符类，于是找不到自己装的对象。
+
+**解决**：设置 `search_path` 包含 `ag_catalog`：
+
+```sql
+SET search_path = ag_catalog, "$user", public;
+SELECT ag_catalog.create_graph('my_graph');
+```
+
+**注意**：即使写全限定名 `ag_catalog.create_graph(...)` 也**不能**绕开，因为失败发生在函数内部对操作符类的查找上，不是函数调用本身。
+
+**对应用接入的影响**：从应用连接（如 Odoo）时，必须在会话初始化时设置 `search_path`，不能只在 `psql` 里设。否则应用侧建图会失败，而手工在 psql 里执行却是成功的——这是最迷惑人的地方。
+
+### 坑 9：`CREATE EXTENSION plpython3u` 失败，缺 `libpython3.14.dll`（2026-10-07 新增）
+
+**现象**：
+
+```
+$ ldd $(pg_config --pkglibdir)/plpython3.dll
+    libpython3.14.dll => not found
+```
+
+`plpython3u.control` 与 `plpython3--1.0.sql` 都在，但扩展无法加载。
+
+**原因**：MinGW 的 Python 运行时未安装。注意 MSYS2 的 `/usr/bin` 下的 python 与 Scoop 的 Windows Python **都不满足**——需要 ABI 匹配的 MinGW 版本。
+
+**解决**：
+
+```bash
+pacman -S mingw-w64-x86_64-python      # 实测装到 3.14.5-1
+ldd $(pg_config --pkglibdir)/plpython3.dll   # 确认 not found 归零
+```
+
+装好后可通过实际调用验证：
+
+```sql
+CREATE EXTENSION plpython3u;
+CREATE FUNCTION pyver() RETURNS text LANGUAGE plpython3u AS
+$$ import sys; return sys.version $$;
+SELECT pyver();
+-- 3.14.5 (main, May 12 2026) [MINGW GCC 16.1.0 64 bit (AMD64)]
+```
+
+此坑与 AGE 本身无关，但会影响依赖 `plpython3u` 的扩展（如 Jev），见 §八之二。
+
+### 坑 10：实例崩溃 `exception 0xC0000142`（2026-10-07 记录，原因未确认）
+
+**现象**：日志出现
+
+```
+LOG:  autovacuum worker (PID 6128) was terminated by exception 0xC0000142
+LOG:  terminating any other active server processes
+LOG:  all server processes terminated; reinitializing
+```
+
+`0xC0000142` 是 Windows 的 `STATUS_DLL_INIT_FAILED`。本次发生在**刚安装 MinGW Python 之后、加载 `plpython3u` 的会话期间**，因此怀疑与 autovacuum 子进程加载 Python 运行时有关，但**未确认因果关系**。
+
+**恢复**（实测有效，数据未丢失）：
+
+```bash
+pg_ctl -D D:/mydata/pgdata stop -m fast
+pg_ctl -D D:/mydata/pgdata -o '-p 5433' -l D:/mydata/pgdata/logfile start
+```
+
+实例会自动完成 WAL 恢复并重新接受连接。
+
+**小坑**：崩溃后直接 `start` 可能报 `could not open log file ... Permission denied`（日志文件被占用）。先 `stop -m fast` 再启动即可。
+
+**状态**：只出现过一次，重启后未复现。**不要据此断定是 `plpython3u` 的问题**；若后续频繁出现，需排查 autovacuum 与 PL/Python 的交互，或将依赖 PL/Python 的扩展移到独立实例。
 
 ## 十、文件清单
 
@@ -463,7 +589,9 @@ age-source/
 ---
 
 *文档创建时间：2026-06-17*
-*最近更新：2026-08-26（升级到 AGE 1.8.0：合并 `apache/PG18`，5 处 MinGW 补丁自动保留；新增坑 5/坑 6、pacman 密钥环与代理说明；修正 Scoop 位置为 `d:\programs\scoop` 兼容写法）*
+*最近更新：2026-10-07（新增 §八之二 与其他扩展共存；新增坑 8 `search_path` 缺失导致 `create_graph` 失败、坑 9 `plpython3u` 缺 `libpython3.14.dll`、坑 10 实例崩溃 `0xC0000142` 与恢复；修正坑 7 中关于 `search_path` 仅为省略前缀的说法）*
+*历史更新：2026-08-26（升级到 AGE 1.8.0：合并 `apache/PG18`，5 处 MinGW 补丁自动保留；新增坑 5/坑 6、pacman 密钥环与代理说明；修正 Scoop 位置为 `d:\programs\scoop` 兼容写法）*
 *编译与运行环境：Windows + MSYS2 MinGW64 + GCC 16.1.0 + PostgreSQL 18.4（MSYS2/MinGW，5433）*
 *Scoop 路径：`SCOOP_ROOT` 优先取 `%SCOOP%`，其次 `d:\programs\scoop`，最后回退 `C:\Users\<用户名>\scoop`*
 *已验证：编译 EXIT_CODE=0、安装 EXIT_CODE=0、扩展版本 1.8.0；Cypher 基础功能与 MERGE ON CREATE/ON MATCH 实测通过*
+*2026-10-07 另测：AGE 1.8.0 与 pgvector 0.8.6、`plpython3u` 1.0、Jev 0.2.1 在同一库中共存且各自可用*
