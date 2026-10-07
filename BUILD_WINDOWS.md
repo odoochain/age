@@ -565,7 +565,9 @@ pg_ctl -D D:/mydata/pgdata -o '-p 5433' -l D:/mydata/pgdata/logfile start
 
 **小坑**：崩溃后直接 `start` 可能报 `could not open log file ... Permission denied`（日志文件被占用）。先 `stop -m fast` 再启动即可。
 
-**状态**：只出现过一次，重启后未复现。**不要据此断定是 `plpython3u` 的问题**；若后续频繁出现，需排查 autovacuum 与 PL/Python 的交互，或将依赖 PL/Python 的扩展移到独立实例。
+**状态更新（2026-10-07）**：**已复现第二次**（在跑 `make installcheck` 期间）。两次时间窗都与 `plpython3u` 相关，但因果未确认。
+
+在根因定位前，建议**不要让依赖 `plpython3u` 的扩展（如 Jev）与业务关键库共用实例**，改用独立实例隔离。排查方向：未通过 `shared_preload_libraries` 预加载 Python 时，autovacuum 等后台进程首次加载 `plpython3.dll` 的 DLL 初始化路径。
 
 ## 十、文件清单
 
