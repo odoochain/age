@@ -581,7 +581,25 @@ LOG:  all server processes terminated; reinitializing
 
 **重启只能短暂恢复**：15:23 就绪→15:52 崩；重启→16:24 在启动后约 1 秒即崩（普通 client backend）；17:26 就绪→17:56 又不可连接。失败类型不局限于 autovacuum，也不需要长时间运行才触发。
 
-**不要再往扩展方向排查。** 下一步应以转储定位故障 DLL，并排查桌面堆/会话配额、句柄与内存压力、安全软件注入、PATH 中同名 DLL 优先解析等环境级因素；也可验证以服务方式运行或改用 MSVC 版 PostgreSQL 是否规避。转储归档见 `D:/odoochain/pg-crash-evidence-20261007-*.zip`，详细时间线见 `d:\odoochain\odoochain\doc\dev\postgres-extensions.md` §6。建议单独立项，不要在 AGE 兼容性语境下继续投入。
+**根因已定位（2026-10-07 转储分析）**：三份转储经 WinDbg 加载微软符号后结论一致——`WER.BlockedOn: AlpcPort`，`FAILURE_BUCKET_ID: APPLICATION_HANG_BlockedOn_AlpcPort_...postgres.exe`。主线程栈：
+
+```
+ntdll!NtAlpcSendWaitReceivePort    ← 无限等待
+ntdll!CsrClientCallServer          ← 向 CSRSS 注册新进程
+KERNELBASE!CreateProcessInternalW
+kernel32!CreateProcessAStub
+postgres!PostmasterMain
+```
+
+PostgreSQL 在 Windows 上无 `fork()`，每个后端都用 `CreateProcess` 创建，而该调用必须经 **ALPC 与 CSRSS** 通信。该通信阻塞后，postmaster 主线程无限等待——这正是「进程存活、仍监听、却不产出后端也不写日志」的原因。`0xC0000142` 是子进程初始化失败的**结果**，不是原因。
+
+这也解释了为何独立进程创建正常（`postgres --version`、`initdb` 均 exit=0）：它们由 shell 发起，不经过已阻塞的 postmaster 主线程。
+
+**与 AGE 及任何扩展无关**：栈上无扩展模块，三份转储模块数均 47，`python`/`plpython`/`age`/`vector` 匹配均为 0。
+
+**不要再对比 MinGW 与 MSVC 版 PostgreSQL** —— 阻塞在 Windows 进程创建路径上，与编译器 ABI 无关。
+
+排查方向应转向拦截 `CreateProcess` 的第三方组件（安全软件、备份代理、磁盘服务；本机 `WDDriveService` 持 10421 句柄，为首要怀疑对象），以及会话资源压力（会话 1 有 268 个进程）。缓解可考虑给 PG 目录加杀毒排除项、减少会话进程数，或改以服务方式（会话 0）运行。详细证据与后续步骤见 `d:\odoochain\odoochain\doc\dev\postgres-extensions.md` §6.2.2–6.4。
 
 ## 十、文件清单
 
